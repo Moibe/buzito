@@ -274,6 +274,18 @@
 
 <Board halfU={ARENA_HALF_U} halfV={ARENA_HALF_V} tileSize={TILE_SIZE} seed={7} />
 
+<!-- Sea fill: a flat ocean sheet just below the tile tops, spanning the
+     whole arena (out to under the frame walls). It backs the zigzag boundary
+     where the hex tiling meets the straight frame, so those edge gaps read
+     as deeper sea instead of showing the page background. Invisible in the
+     interior — it sits below every wave-bobbed hex top (min top ≈ 0.34, sheet
+     top = 0.32) — and its own edges are hidden under the opaque frame rails.
+     Rotated π/4 so it aligns with the arena's screen-space u/v rectangle. -->
+<T.Mesh position={[0, 0.31, 0]} rotation={[0, Math.PI / 4, 0]} receiveShadow>
+  <T.BoxGeometry args={[2 * FRAME_U, 0.02, 2 * FRAME_V]} />
+  <T.MeshStandardMaterial color="#1e5f8a" flatShading />
+</T.Mesh>
+
 <!-- The box that frames the play area. -->
 <ArenaFrame
   halfU={FRAME_U}
