@@ -1,9 +1,10 @@
 # buzito
 
-Juego de submarino con movimiento libre sobre un mar hexagonal 3D infinito.
-Tablero y malla del submarino extraídos de `hexa-turnos`; el motor de
-movimiento es nuevo: integración continua desde el teclado en vez de
-turnos por hexágono.
+Juego de submarino con movimiento libre sobre una arena hexagonal 3D de
+tamaño fijo (disco de radio 8, siempre completo en pantalla). Tablero y
+malla del submarino extraídos de `hexa-turnos`; el motor de movimiento es
+nuevo: integración continua desde el teclado en vez de turnos por hexágono.
+El submarino queda confinado a la arena — no hay océano más allá.
 
 ## Controles
 
@@ -29,9 +30,9 @@ npm run dev
 ## Estructura
 
 - `src/lib/hex.ts` — matemática hexagonal (axial ↔ mundo, disco de tablero)
-- `src/lib/Board.svelte` — mar hexagonal (InstancedMesh + oleaje), se re-centra en el sub
+- `src/lib/Board.svelte` — mar hexagonal (InstancedMesh + oleaje), arena fija
 - `src/lib/Submarine.svelte` — malla del submarino (renderer puro: recibe `x/z/heading`)
 - `src/lib/OceanCurrents.svelte` — partículas de espuma (corriente ambiental)
-- `src/lib/Scene.svelte` — física + teclado + cámara que sigue al sub
+- `src/lib/Scene.svelte` — física + teclado + cámara fija con zoom auto-ajustado + clamp a la arena
 - `src/lib/game.svelte.ts` — estado compartido (posición, rumbo, sumergido)
 - `src/routes/+page.svelte` — Canvas + HUD (botón de inmersión)

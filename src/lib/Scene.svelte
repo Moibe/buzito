@@ -2,23 +2,31 @@
   import { T, useTask } from '@threlte/core';
   import type {
     DirectionalLight as ThreeDirLight,
-    Object3D as ThreeObject3D,
     OrthographicCamera as ThreeOrthoCam,
   } from 'three';
   import Board from './Board.svelte';
   import Submarine from './Submarine.svelte';
   import OceanCurrents from './OceanCurrents.svelte';
-  import { worldToAxial, axialRound, axialToWorld } from './hex';
+  import { axialToWorld } from './hex';
   import { game, toggleSubmerged } from './game.svelte';
 
   const TILE_SIZE = 1;
-  const ZOOM = 45;
 
-  // Camera rig: fixed orthographic iso-NE view that follows the submarine.
-  // Same yaw/pitch/radius as the original (cam offset (+20, +20, +20) from
-  // target → yaw=π/4, pitch=atan(1/√2)≈35.26°, radius 20·√3) so the world
-  // looks identical to hexa-turnos at boot. The offset is constant, so the
-  // camera's orientation never changes — it just translates with the sub.
+  // --- The arena ---
+  // Fixed hex disc centered at the origin: this IS the whole play area, no
+  // infinite-ocean scrolling. The world footprint of an axial disc of radius
+  // R is a hexagon with circumradius √3·R (toward the corners) and inradius
+  // 1.5·R (toward the edges).
+  const BOARD_RADIUS = 8;
+  const BOARD_WORLD_RADIUS = Math.sqrt(3) * BOARD_RADIUS * TILE_SIZE;
+  // Movement clamp: the circle inscribed in the world hexagon (1.5·R), minus
+  // a margin so the hull always stays visually over the tiles.
+  const ARENA_RADIUS = 1.5 * BOARD_RADIUS * TILE_SIZE - 1.0;
+
+  // Camera rig: fixed orthographic iso-NE view aimed at the arena center.
+  // Same yaw/pitch as hexa-turnos (yaw=π/4, pitch=atan(1/√2)≈35.26°) so the
+  // world reads identically; the camera never moves — the board fits the
+  // screen via the auto-fit zoom below.
   const ORBIT_RADIUS = 20 * Math.sqrt(3);
   const YAW = Math.PI / 4;
   const PITCH = Math.atan(1 / Math.SQRT2);
@@ -31,26 +39,52 @@
   // mutations and infinite-loop the reactive graph.
   let cam = $state.raw<ThreeOrthoCam | undefined>(undefined);
   let dirLight = $state.raw<ThreeDirLight | undefined>(undefined);
-  let lightTarget = $state.raw<ThreeObject3D | undefined>(undefined);
 
-  // The camera's ORIENTATION is constant (position and lookAt target share
-  // the same offset), so a single lookAt on mount pins the iso view; from
-  // then on the template's reactive position just translates the camera.
-  // Keeping the position template-reactive (instead of imperative in
-  // useTask) means camera and submarine update in the SAME Svelte flush —
-  // no one-frame lag between them.
+  // One-time orientation: the camera is static, so a single lookAt at the
+  // arena center pins the iso view for the whole session.
   $effect(() => {
     if (!cam) return;
-    cam.lookAt(cam.position.x - CAM_OFF_X, 0, cam.position.z - CAM_OFF_Z);
+    cam.lookAt(0, 0, 0);
   });
 
-  // DirectionalLight aims at .target (default: a detached Object3D pinned at
-  // the world origin). Without re-targeting, sailing away from the origin
-  // would slowly tilt the light toward the horizon and break the shadows.
-  // The target Object3D lives in the scene graph (template below) and
-  // follows the sub, keeping the light direction constant everywhere.
+  // Auto-fit zoom: pick the largest zoom that still shows the whole board
+  // hexagon (with a small breathing margin) in both screen axes. On the
+  // ground plane, 1 px maps to 1/zoom world units horizontally and
+  // 1/(zoom·sin(pitch)) vertically. Imperative + updateProjectionMatrix so
+  // the frustum change takes effect immediately.
   $effect(() => {
-    if (dirLight && lightTarget) dirLight.target = lightTarget;
+    const c = cam;
+    if (!c) return;
+    const update = () => {
+      const needed = BOARD_WORLD_RADIUS * 1.08;
+      c.zoom =
+        Math.min(window.innerWidth / 2, window.innerHeight / (2 * Math.sin(PITCH))) /
+        needed;
+      c.updateProjectionMatrix();
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  });
+
+  // Shadow frustum: the default directional-light shadow camera only covers
+  // ±5 world units — the sub would lose its shadow past the arena center.
+  // Widen it to cover the whole arena (and bump the map so it stays crisp).
+  $effect(() => {
+    const l = dirLight;
+    if (!l) return;
+    const sc = l.shadow.camera;
+    const extent = BOARD_WORLD_RADIUS + 3;
+    sc.left = -extent;
+    sc.right = extent;
+    sc.top = extent;
+    sc.bottom = -extent;
+    sc.updateProjectionMatrix();
+    l.shadow.mapSize.set(1024, 1024);
+    if (l.shadow.map) {
+      l.shadow.map.dispose();
+      l.shadow.map = null;
+    }
   });
 
   // --- Movement tuning ---
@@ -129,7 +163,7 @@
     };
   });
 
-  // --- Physics + camera, integrated once per frame ---
+  // --- Physics, integrated once per frame ---
   // Tank-style controls: ←/→ rotate the heading, ↑/↓ apply thrust along the
   // bow. With rotation.y = θ, the bow (local -Z) points at world
   // (-sin θ, -cos θ) — see the coordinate conventions in hexa-turnos.
@@ -145,48 +179,19 @@
     const fwdZ = -Math.cos(game.heading);
     game.x += fwdX * speed * delta;
     game.z += fwdZ * speed * delta;
+
+    // Confine the sub to the arena: clamp the POSITION back onto the circle,
+    // which naturally slides the hull along the edge instead of gluing it.
+    const dist = Math.hypot(game.x, game.z);
+    if (dist > ARENA_RADIUS) {
+      const s = ARENA_RADIUS / dist;
+      game.x *= s;
+      game.z *= s;
+    }
+
     // Forward way only: the wake renders at the stern, so backing up must
     // not build it (foam at the leading edge would read as wrong).
     game.moving = speed > 0.01;
-  });
-
-  // --- Board sizing + re-centering ---
-  // The orthographic projection maps 1 screen pixel → 1/(ZOOM·sin(pitch))
-  // world units on the y=0 plane. Size the hex disc so its edge never shows.
-  // The +3 safety margin covers the disc-vs-rectangular-viewport slop.
-  function calcRadius(width: number, height: number, pitchRad: number): number {
-    const wScreen = width / ZOOM;
-    const hScreen = height / ZOOM / Math.max(0.1, Math.sin(pitchRad));
-    const halfDiagonal = Math.sqrt(wScreen * wScreen + hScreen * hScreen) / 2;
-    return Math.ceil(halfDiagonal / (1.5 * TILE_SIZE)) + 3;
-  }
-
-  let radius = $state(20);
-  $effect(() => {
-    const update = () => {
-      radius = calcRadius(window.innerWidth, window.innerHeight, PITCH);
-    };
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  });
-
-  // Re-center the hex disc on whichever hex the submarine is over. The cell
-  // colors are a deterministic hash of (q, r, seed), so re-centering doesn't
-  // make the sea flicker — the illusion of an infinite ocean.
-  //
-  // These MUST be primitive (number) deriveds, not one {q, r} object: they
-  // recompute every frame while the sub moves, but the ===-equality cutoff
-  // on primitives stops propagation, so Board's buildBoard/color work only
-  // re-runs when the sub actually crosses a hex boundary. An object derived
-  // would have fresh identity each frame and re-trigger it all at 60fps.
-  const centerQ = $derived.by(() => {
-    const c = worldToAxial(game.x, game.z, TILE_SIZE);
-    return axialRound(c.q, c.r).q;
-  });
-  const centerR = $derived.by(() => {
-    const c = worldToAxial(game.x, game.z, TILE_SIZE);
-    return axialRound(c.q, c.r).r;
   });
 
   // Fixed ambient current direction (world-space): foam streaks drift
@@ -198,33 +203,31 @@
   bind:ref={cam}
   makeDefault
   position={[CAM_OFF_X, CAM_OFF_Y, CAM_OFF_Z]}
-  zoom={ZOOM}
   near={0.1}
   far={500}
 />
 
 <T.AmbientLight intensity={0.6} />
-<!-- The light and its aim target both follow the sub with constant offsets,
-     so the light DIRECTION (and the shadows) never change as it sails. -->
-<T.Object3D bind:ref={lightTarget} position={[game.x, 0, game.z]} />
+<!-- Static light: with a fixed arena, the default target at the origin is
+     exactly right — the light direction never needs to change. -->
 <T.DirectionalLight
   bind:ref={dirLight}
-  position={[10 + game.x, 20, 10 + game.z]}
+  position={[10, 20, 10]}
   intensity={1.2}
   castShadow
 />
 <T.HemisphereLight args={['#ffe9c2', '#3a2a1a', 0.4]} />
 
-<Board {centerQ} {centerR} {radius} tileSize={TILE_SIZE} seed={7} />
+<Board centerQ={0} centerR={0} radius={BOARD_RADIUS} tileSize={TILE_SIZE} seed={7} />
 
-<!-- Foam-streak particle field around the sub — ambient sea current. -->
+<!-- Foam-streak particle field over the arena — ambient sea current. -->
 <OceanCurrents
-  centerX={game.x}
-  centerZ={game.z}
+  centerX={0}
+  centerZ={0}
   headingX={CURRENT.x}
   headingZ={CURRENT.z}
   y={0.5}
-  radius={28}
+  radius={1.5 * BOARD_RADIUS * TILE_SIZE}
 />
 
 <Submarine
