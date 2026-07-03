@@ -37,14 +37,21 @@
   const CAM_OFF_Y = ORBIT_RADIUS * Math.sin(PITCH);
   const CAM_OFF_Z = Math.cos(YAW) * ORBIT_RADIUS * Math.cos(PITCH);
 
-  // Size the arena to the viewport, once. On the ground plane 1 px maps to
-  // 1/zoom world units horizontally and 1/(zoom·sin(pitch)) along the depth
-  // axis. Deliberately NOT re-run on resize: the arena is the world — it
-  // must not grow or shrink mid-game (the zoom-fit effect below handles
-  // resizes by re-fitting the view instead).
+  // Size the arena to the viewport — at mount AND on every resize, so the
+  // sea always fills the current window (fullscreen included). Regenerating
+  // is safe: cell colors are a deterministic hash of (q, r), so tiles that
+  // survive a resize keep their color, and the movement clamp pulls the sub
+  // back in if the arena shrinks around it. On the ground plane 1 px maps
+  // to 1/zoom world units horizontally and 1/(zoom·sin(pitch)) along the
+  // depth axis.
   $effect(() => {
-    halfU = window.innerWidth / (2 * BASE_ZOOM);
-    halfV = window.innerHeight / (2 * BASE_ZOOM * Math.sin(PITCH));
+    const update = () => {
+      halfU = window.innerWidth / (2 * BASE_ZOOM);
+      halfV = window.innerHeight / (2 * BASE_ZOOM * Math.sin(PITCH));
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   });
 
   // $state.raw — three.js mutates cam.quaternion etc. internally on every
@@ -60,27 +67,8 @@
     cam.lookAt(0, 0, 0);
   });
 
-  // Zoom fit: show the whole (fixed) arena. At mount this equals BASE_ZOOM
-  // exactly; if the window is later resized, the zoom re-fits so the play
-  // area stays fully visible (the bleed row of tiles absorbs most of the
-  // slack). Imperative + updateProjectionMatrix so the frustum change takes
-  // effect immediately.
-  $effect(() => {
-    const c = cam;
-    if (!c) return;
-    const u = halfU;
-    const v = halfV;
-    const update = () => {
-      c.zoom = Math.min(
-        window.innerWidth / (2 * u),
-        window.innerHeight / (2 * Math.sin(PITCH) * v)
-      );
-      c.updateProjectionMatrix();
-    };
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  });
+  // No zoom-fit needed: the arena re-fits ITSELF to the viewport (effect
+  // above), so the camera zoom is simply constant at BASE_ZOOM.
 
   // Shadow frustum: the default directional-light shadow camera only covers
   // ±5 world units — the sub would lose its shadow past the arena center.
@@ -224,6 +212,7 @@
   bind:ref={cam}
   makeDefault
   position={[CAM_OFF_X, CAM_OFF_Y, CAM_OFF_Z]}
+  zoom={BASE_ZOOM}
   near={0.1}
   far={500}
 />
