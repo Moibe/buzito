@@ -90,3 +90,37 @@ export function buildBoard(
   }
   return cells;
 }
+
+// Hex cells covering a SCREEN-ALIGNED rectangle under the fixed yaw-45° iso
+// camera. Because the camera looks along the world diagonal, a rectangle
+// that reads as "the screen" on the ground plane is rotated 45° in world XZ.
+// u/v are the camera's ground axes: u = (x − z)/√2 (screen right),
+// v = (x + z)/√2 (screen depth). Cells whose CENTER falls inside the given
+// half-extents are included, so the outermost row bleeds ~1 tile past the
+// limits — with extents sized to the viewport, the sea reaches the screen
+// edge with no background showing through.
+export function buildBoardIsoRect(
+  halfU: number,
+  halfV: number,
+  size = 1,
+  seed = 1,
+  tileHeight = 0.4
+): HexCell[] {
+  const cells: HexCell[] = [];
+  // Axis-aligned world bounds of the rotated rect: |x|, |z| ≤ (halfU+halfV)/√2.
+  const worldBound = (halfU + halfV) * Math.SQRT1_2;
+  const rMax = Math.ceil(worldBound / (1.5 * size));
+  for (let r = -rMax; r <= rMax; r++) {
+    const qMin = Math.ceil(-worldBound / (SQRT3 * size) - r / 2);
+    const qMax = Math.floor(worldBound / (SQRT3 * size) - r / 2);
+    for (let q = qMin; q <= qMax; q++) {
+      const { x, z } = axialToWorld(q, r, size);
+      const u = (x - z) * Math.SQRT1_2;
+      const v = (x + z) * Math.SQRT1_2;
+      if (Math.abs(u) > halfU || Math.abs(v) > halfV) continue;
+      const colorIdx = Math.floor(hash2D(q, r, seed) * PALETTE.length);
+      cells.push({ q, r, x, z, height: tileHeight, color: PALETTE[colorIdx] });
+    }
+  }
+  return cells;
+}

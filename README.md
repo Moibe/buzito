@@ -1,10 +1,11 @@
 # buzito
 
-Juego de submarino con movimiento libre sobre una arena hexagonal 3D de
-tamaño fijo (disco de radio 8, siempre completo en pantalla). Tablero y
-malla del submarino extraídos de `hexa-turnos`; el motor de movimiento es
-nuevo: integración continua desde el teclado en vez de turnos por hexágono.
-El submarino queda confinado a la arena — no hay océano más allá.
+Juego de submarino con movimiento libre sobre una arena 3D de hexágonos de
+tamaño fijo: un rectángulo alineado a la pantalla que llena el viewport
+completo (dimensionado una vez al cargar). Tablero y malla del submarino
+extraídos de `hexa-turnos`; el motor de movimiento es nuevo: integración
+continua desde el teclado en vez de turnos por hexágono. El submarino queda
+confinado a la arena — no hay océano más allá.
 
 ## Controles
 
@@ -29,10 +30,10 @@ npm run dev
 
 ## Estructura
 
-- `src/lib/hex.ts` — matemática hexagonal (axial ↔ mundo, disco de tablero)
+- `src/lib/hex.ts` — matemática hexagonal (axial ↔ mundo, arena rectangular iso)
 - `src/lib/Board.svelte` — mar hexagonal (InstancedMesh + oleaje), arena fija
 - `src/lib/Submarine.svelte` — malla del submarino (renderer puro: recibe `x/z/heading`)
 - `src/lib/OceanCurrents.svelte` — partículas de espuma (corriente ambiental)
-- `src/lib/Scene.svelte` — física + teclado + cámara fija con zoom auto-ajustado + clamp a la arena
+- `src/lib/Scene.svelte` — física + teclado + cámara fija + clamp rectangular a la arena
 - `src/lib/game.svelte.ts` — estado compartido (posición, rumbo, sumergido)
 - `src/routes/+page.svelte` — Canvas + HUD (botón de inmersión)

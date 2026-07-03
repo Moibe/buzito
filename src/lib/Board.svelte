@@ -7,18 +7,19 @@
     MeshStandardMaterial,
     Object3D,
   } from 'three';
-  import { buildBoard, type HexCell } from './hex';
+  import { buildBoardIsoRect, type HexCell } from './hex';
 
+  // Fixed rectangular arena aligned to the iso camera's screen axes (see
+  // buildBoardIsoRect). halfU/halfV are half-extents in world units along
+  // screen-right / screen-depth.
   let {
-    centerQ = 0,
-    centerR = 0,
-    radius = 6,
+    halfU = 18,
+    halfV = 18,
     tileSize = 1,
     seed = 1,
   }: {
-    centerQ?: number;
-    centerR?: number;
-    radius?: number;
+    halfU?: number;
+    halfV?: number;
     tileSize?: number;
     seed?: number;
   } = $props();
@@ -35,7 +36,7 @@
   const WAVE_SPATIAL = 0.35;
 
   const cells = $derived(
-    buildBoard(centerQ, centerR, radius, tileSize, seed, TILE_HEIGHT)
+    buildBoardIsoRect(halfU, halfV, tileSize, seed, TILE_HEIGHT)
   );
 
   // Shared geometry + material — one of each across all instances. This is
@@ -55,22 +56,19 @@
 
   let elapsed = 0;
   // Identity guard for the color pass: cells only gets a NEW array when the
-  // board actually re-centers (the parent passes primitive centerQ/centerR,
-  // whose equality cutoff stops per-frame churn).
+  // arena dimensions change (once at mount, when Scene sizes it to the
+  // viewport) — the colors are rewritten only then, not per frame.
   let lastCells: HexCell[] | null = null;
 
   function waveAt(x: number, z: number): number {
     return WAVE_AMP * Math.sin(elapsed * WAVE_FREQ + (x + z) * WAVE_SPATIAL);
   }
 
-  // Per-frame: update instance matrices for the sea wave. The bounding sphere
-  // must follow the instances — the board re-centers around the submarine far
-  // from the origin, and a stale sphere would get the whole mesh frustum-culled.
+  // Per-frame: update instance matrices for the sea wave, keeping the
+  // bounding sphere in sync with the instances.
   //
-  // Colors are written HERE too (not in an $effect) so that on a re-center
-  // frame the matrices and the colors update atomically — an effect would
-  // flush on a different tick and the ocean pattern would jump one hex for
-  // a single frame at every boundary crossing.
+  // Colors are written HERE too (not in an $effect) so that when the cell
+  // set changes, matrices and colors update atomically in the same frame.
   useTask((delta) => {
     elapsed += delta;
     const inst = instancedRef;

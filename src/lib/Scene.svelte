@@ -13,26 +13,39 @@
   const TILE_SIZE = 1;
 
   // --- The arena ---
-  // Fixed hex disc centered at the origin: this IS the whole play area, no
-  // infinite-ocean scrolling. The world footprint of an axial disc of radius
-  // R is a hexagon with circumradius √3·R (toward the corners) and inradius
-  // 1.5·R (toward the edges).
-  const BOARD_RADIUS = 8;
-  const BOARD_WORLD_RADIUS = Math.sqrt(3) * BOARD_RADIUS * TILE_SIZE;
-  // Movement clamp: the circle inscribed in the world hexagon (1.5·R), minus
-  // a margin so the hull always stays visually over the tiles.
-  const ARENA_RADIUS = 1.5 * BOARD_RADIUS * TILE_SIZE - 1.0;
+  // Fixed screen-aligned rectangle of hexes centered at the origin: this IS
+  // the whole play area. Because the iso camera looks along the world
+  // diagonal, the rectangle lives in the camera's ground axes
+  // (u = screen right = (x−z)/√2, v = screen depth = (x+z)/√2) — see
+  // buildBoardIsoRect. Half-extents are sized ONCE at mount so the arena
+  // fills the viewport at BASE_ZOOM; the outermost tile row bleeds past the
+  // screen edge, so no background gradient shows through.
+  const BASE_ZOOM = 50;
+  let halfU = $state(18);
+  let halfV = $state(18);
+  // Margin the hull keeps from the arena limits so it always stays visually
+  // over the tiles.
+  const EDGE_MARGIN = 1.0;
 
   // Camera rig: fixed orthographic iso-NE view aimed at the arena center.
   // Same yaw/pitch as hexa-turnos (yaw=π/4, pitch=atan(1/√2)≈35.26°) so the
-  // world reads identically; the camera never moves — the board fits the
-  // screen via the auto-fit zoom below.
+  // world reads identically; the camera never moves.
   const ORBIT_RADIUS = 20 * Math.sqrt(3);
   const YAW = Math.PI / 4;
   const PITCH = Math.atan(1 / Math.SQRT2);
   const CAM_OFF_X = Math.sin(YAW) * ORBIT_RADIUS * Math.cos(PITCH);
   const CAM_OFF_Y = ORBIT_RADIUS * Math.sin(PITCH);
   const CAM_OFF_Z = Math.cos(YAW) * ORBIT_RADIUS * Math.cos(PITCH);
+
+  // Size the arena to the viewport, once. On the ground plane 1 px maps to
+  // 1/zoom world units horizontally and 1/(zoom·sin(pitch)) along the depth
+  // axis. Deliberately NOT re-run on resize: the arena is the world — it
+  // must not grow or shrink mid-game (the zoom-fit effect below handles
+  // resizes by re-fitting the view instead).
+  $effect(() => {
+    halfU = window.innerWidth / (2 * BASE_ZOOM);
+    halfV = window.innerHeight / (2 * BASE_ZOOM * Math.sin(PITCH));
+  });
 
   // $state.raw — three.js mutates cam.quaternion etc. internally on every
   // lookAt/render. A deep $state Proxy would treat each of those as reactive
@@ -47,19 +60,21 @@
     cam.lookAt(0, 0, 0);
   });
 
-  // Auto-fit zoom: pick the largest zoom that still shows the whole board
-  // hexagon (with a small breathing margin) in both screen axes. On the
-  // ground plane, 1 px maps to 1/zoom world units horizontally and
-  // 1/(zoom·sin(pitch)) vertically. Imperative + updateProjectionMatrix so
-  // the frustum change takes effect immediately.
+  // Zoom fit: show the whole (fixed) arena. At mount this equals BASE_ZOOM
+  // exactly; if the window is later resized, the zoom re-fits so the play
+  // area stays fully visible (the bleed row of tiles absorbs most of the
+  // slack). Imperative + updateProjectionMatrix so the frustum change takes
+  // effect immediately.
   $effect(() => {
     const c = cam;
     if (!c) return;
+    const u = halfU;
+    const v = halfV;
     const update = () => {
-      const needed = BOARD_WORLD_RADIUS * 1.08;
-      c.zoom =
-        Math.min(window.innerWidth / 2, window.innerHeight / (2 * Math.sin(PITCH))) /
-        needed;
+      c.zoom = Math.min(
+        window.innerWidth / (2 * u),
+        window.innerHeight / (2 * Math.sin(PITCH) * v)
+      );
       c.updateProjectionMatrix();
     };
     update();
@@ -74,7 +89,8 @@
     const l = dirLight;
     if (!l) return;
     const sc = l.shadow.camera;
-    const extent = BOARD_WORLD_RADIUS + 3;
+    // Axis-aligned world half-extent of the rotated arena rectangle.
+    const extent = (halfU + halfV) * Math.SQRT1_2 + 3;
     sc.left = -extent;
     sc.right = extent;
     sc.top = extent;
@@ -180,13 +196,18 @@
     game.x += fwdX * speed * delta;
     game.z += fwdZ * speed * delta;
 
-    // Confine the sub to the arena: clamp the POSITION back onto the circle,
-    // which naturally slides the hull along the edge instead of gluing it.
-    const dist = Math.hypot(game.x, game.z);
-    if (dist > ARENA_RADIUS) {
-      const s = ARENA_RADIUS / dist;
-      game.x *= s;
-      game.z *= s;
+    // Confine the sub to the arena: clamp the POSITION per axis in the
+    // camera-aligned u/v frame, which naturally slides the hull along the
+    // walls instead of gluing it to them.
+    const u = (game.x - game.z) * Math.SQRT1_2;
+    const v = (game.x + game.z) * Math.SQRT1_2;
+    const uLim = halfU - EDGE_MARGIN;
+    const vLim = halfV - EDGE_MARGIN;
+    const cu = Math.max(-uLim, Math.min(uLim, u));
+    const cv = Math.max(-vLim, Math.min(vLim, v));
+    if (cu !== u || cv !== v) {
+      game.x = (cu + cv) * Math.SQRT1_2;
+      game.z = (cv - cu) * Math.SQRT1_2;
     }
 
     // Forward way only: the wake renders at the stern, so backing up must
@@ -218,7 +239,7 @@
 />
 <T.HemisphereLight args={['#ffe9c2', '#3a2a1a', 0.4]} />
 
-<Board centerQ={0} centerR={0} radius={BOARD_RADIUS} tileSize={TILE_SIZE} seed={7} />
+<Board {halfU} {halfV} tileSize={TILE_SIZE} seed={7} />
 
 <!-- Foam-streak particle field over the arena — ambient sea current. -->
 <OceanCurrents
@@ -227,7 +248,7 @@
   headingX={CURRENT.x}
   headingZ={CURRENT.z}
   y={0.5}
-  radius={1.5 * BOARD_RADIUS * TILE_SIZE}
+  radius={Math.max(halfU, halfV)}
 />
 
 <Submarine
