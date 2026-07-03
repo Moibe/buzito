@@ -11,35 +11,48 @@
   import { axialToWorld } from './hex';
   import { game, toggleSubmerged } from './game.svelte';
 
-  const TILE_SIZE = 1;
+  // Size of each hex in world units. Bigger TILE_SIZE → bigger tiles AND a
+  // bigger submarine (SUB_SCALE tracks it), and — because the arena's world
+  // extent below is fixed — FEWER tiles. The zoom-fit frames that fixed
+  // extent, so raising this doesn't change how much screen the arena fills;
+  // it just makes everything on it larger and coarser.
+  const TILE_SIZE = 1.3;
+  // Submarine size — tracks the tile size so the sub keeps its proportion
+  // (~one tile long) as tiles grow/shrink.
+  const SUB_SCALE = TILE_SIZE;
 
   // --- The arena (the game world) ---
   // A FIXED rectangle of hexes aligned to the iso camera's screen axes
-  // (u = screen right, v = screen depth; see buildBoardIsoRect). Its size is
-  // constant — it does NOT depend on the window — so the number of tiles
-  // (the whole point of the game: submerge on all of them) and the
-  // difficulty stay the same on any screen. A bigger window just renders
-  // the same tiles bigger, via the zoom-fit below.
+  // (u = screen right, v = screen depth; see buildBoardIsoRect). Its WORLD
+  // extent is constant — it does NOT depend on the window — so the number of
+  // tiles (the whole point of the game: submerge on all of them) and the
+  // difficulty stay the same on any screen. A bigger window just renders the
+  // same tiles bigger, via the zoom-fit below.
   //
-  // halfU ≈ halfV ≈ 20 → ~620 tiles, and a screen aspect of
-  // halfU/(halfV·sin(pitch)) ≈ 1.73 (near 16:9), so it fills widescreen
-  // monitors with little margin.
+  // Extent halfU=halfV=20 world units; at TILE_SIZE=1.3 that's ~365 tiles.
+  // Screen aspect halfU/(halfV·sin(pitch)) ≈ 1.73 (near 16:9), so it fills
+  // widescreen monitors with little margin.
   const ARENA_HALF_U = 20;
   const ARENA_HALF_V = 20;
-  // The frame sits just outside the outermost tiles. A size-1 pointy-top
-  // hex body bleeds (√3+1)/(2√2) ≈ 0.966 past its center along u/v; the
-  // wall's inner face must clear that, so margin ≥ 0.966 + thickness/2.
-  const FRAME_MARGIN = 1.2;
-  const FRAME_U = ARENA_HALF_U + FRAME_MARGIN;
-  const FRAME_V = ARENA_HALF_V + FRAME_MARGIN;
+
   // Frame box dimensions — single source of truth, passed to <ArenaFrame>
   // AND used by the zoom-fit below so the 3D rails are budgeted for.
   const FRAME_THICKNESS = 0.4;
   const FRAME_HEIGHT = 0.5;
   const FRAME_Y = 0.4;
-  // How far inside the tile rect the hull is kept, so it never rides over
-  // the frame or off the tiles.
-  const EDGE_MARGIN = 1.2;
+  const FRAME_HALF_THICKNESS = FRAME_THICKNESS / 2;
+
+  // The frame sits just outside the outermost tiles. A pointy-top hex body
+  // bleeds (√3+1)/(2√2)·tileSize ≈ 0.966·tileSize past its center along u/v;
+  // the wall's inner face must clear that, so margin ≥ bleed + thickness/2.
+  const HEX_BLEED = 0.966 * TILE_SIZE;
+  const FRAME_MARGIN = HEX_BLEED + FRAME_HALF_THICKNESS + 0.1;
+  const FRAME_U = ARENA_HALF_U + FRAME_MARGIN;
+  const FRAME_V = ARENA_HALF_V + FRAME_MARGIN;
+
+  // How far inside the tile rect the hull center is kept, so the (larger)
+  // hull never rides over the frame or off the tiles.
+  const EDGE_MARGIN = 1.5;
   // Small gap kept between the frame and the screen edge so the whole box
   // is always visible.
   const FIT_MARGIN = 0.96;
@@ -61,7 +74,6 @@
   // thickness (via sin·pitch); screen-right (u) gains only the wall's own
   // half-thickness. Budgeting the taller top extent on both sides is
   // slightly conservative but guarantees no clip on any aspect ratio.
-  const FRAME_HALF_THICKNESS = FRAME_THICKNESS / 2;
   const FIT_HALF_H = FRAME_U + FRAME_HALF_THICKNESS;
   const FIT_HALF_V =
     Math.sin(PITCH) * (FRAME_V + FRAME_HALF_THICKNESS) +
@@ -287,4 +299,5 @@
   heading={game.heading}
   moving={game.moving}
   submerged={game.submerged}
+  scale={SUB_SCALE}
 />

@@ -1,7 +1,7 @@
 # buzito
 
 Juego de submarino con movimiento libre sobre una arena 3D de hexágonos de
-**tamaño fijo** (~620 tiles, independiente del tamaño de la ventana), enmarcada
+**tamaño fijo** (~365 tiles, independiente del tamaño de la ventana), enmarcada
 por un borde visible. La cámara hace zoom para que la arena completa siempre
 quepa en pantalla: una ventana más grande muestra los mismos tiles más grandes,
 no más tiles — así la dificultad (el objetivo es sumergirse en todos los tiles)
