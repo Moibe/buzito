@@ -97,8 +97,10 @@ export function buildBoard(
 // u/v are the camera's ground axes: u = (x − z)/√2 (screen right),
 // v = (x + z)/√2 (screen depth). Cells whose CENTER falls inside the given
 // half-extents are included, so the outermost row bleeds ~1 tile past the
-// limits — with extents sized to the viewport, the sea reaches the screen
-// edge with no background showing through.
+// limits. Extents are the FIXED arena half-extents (ARENA_HALF_U/V in
+// Scene.svelte); the sea reaching the screen edge is handled by the
+// zoom-to-fit that frames this fixed rect to the viewport, not by sizing
+// the extents to the window.
 export function buildBoardIsoRect(
   halfU: number,
   halfV: number,

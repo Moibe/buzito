@@ -25,11 +25,11 @@
   } = $props();
 
   const TILE_HEIGHT = 0.4;
-  // Upper bound on simultaneous instances. The viewport-fit radius yields
-  // ~1600 cells at 1080p, ~2800 at 1440p and ~5700 at 4K/DPR-1 (radius 43);
-  // 8000 covers up to radius ~50 with headroom. Everything that touches the
-  // instance buffer clamps to this anyway — exceeding it must never write
-  // past the buffer or draw garbage instances.
+  // Upper bound on simultaneous instances. The arena is a FIXED
+  // screen-aligned rectangle (halfU=halfV=20 → ~615 tiles), independent of
+  // window size; 8000 leaves large headroom if the arena is ever enlarged.
+  // Every write to the instance buffer clamps to this (see below), so
+  // exceeding it never writes past the buffer or draws garbage instances.
   const MAX_INSTANCES = 8000;
   const WAVE_AMP = 0.06;
   const WAVE_FREQ = 1.4;
@@ -56,8 +56,8 @@
 
   let elapsed = 0;
   // Identity guard for the color pass: cells only gets a NEW array when the
-  // arena dimensions change (once at mount, when Scene sizes it to the
-  // viewport) — the colors are rewritten only then, not per frame.
+  // fixed arena half-extents (halfU/halfV) change — the colors are rewritten
+  // only then, not per frame.
   let lastCells: HexCell[] | null = null;
 
   function waveAt(x: number, z: number): number {

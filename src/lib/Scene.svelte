@@ -7,25 +7,42 @@
   import Board from './Board.svelte';
   import Submarine from './Submarine.svelte';
   import OceanCurrents from './OceanCurrents.svelte';
+  import ArenaFrame from './ArenaFrame.svelte';
   import { axialToWorld } from './hex';
   import { game, toggleSubmerged } from './game.svelte';
 
   const TILE_SIZE = 1;
 
-  // --- The arena ---
-  // Fixed screen-aligned rectangle of hexes centered at the origin: this IS
-  // the whole play area. Because the iso camera looks along the world
-  // diagonal, the rectangle lives in the camera's ground axes
-  // (u = screen right = (x−z)/√2, v = screen depth = (x+z)/√2) — see
-  // buildBoardIsoRect. Half-extents are sized ONCE at mount so the arena
-  // fills the viewport at BASE_ZOOM; the outermost tile row bleeds past the
-  // screen edge, so no background gradient shows through.
-  const BASE_ZOOM = 50;
-  let halfU = $state(18);
-  let halfV = $state(18);
-  // Margin the hull keeps from the arena limits so it always stays visually
-  // over the tiles.
-  const EDGE_MARGIN = 1.0;
+  // --- The arena (the game world) ---
+  // A FIXED rectangle of hexes aligned to the iso camera's screen axes
+  // (u = screen right, v = screen depth; see buildBoardIsoRect). Its size is
+  // constant — it does NOT depend on the window — so the number of tiles
+  // (the whole point of the game: submerge on all of them) and the
+  // difficulty stay the same on any screen. A bigger window just renders
+  // the same tiles bigger, via the zoom-fit below.
+  //
+  // halfU ≈ halfV ≈ 20 → ~620 tiles, and a screen aspect of
+  // halfU/(halfV·sin(pitch)) ≈ 1.73 (near 16:9), so it fills widescreen
+  // monitors with little margin.
+  const ARENA_HALF_U = 20;
+  const ARENA_HALF_V = 20;
+  // The frame sits just outside the outermost tiles. A size-1 pointy-top
+  // hex body bleeds (√3+1)/(2√2) ≈ 0.966 past its center along u/v; the
+  // wall's inner face must clear that, so margin ≥ 0.966 + thickness/2.
+  const FRAME_MARGIN = 1.2;
+  const FRAME_U = ARENA_HALF_U + FRAME_MARGIN;
+  const FRAME_V = ARENA_HALF_V + FRAME_MARGIN;
+  // Frame box dimensions — single source of truth, passed to <ArenaFrame>
+  // AND used by the zoom-fit below so the 3D rails are budgeted for.
+  const FRAME_THICKNESS = 0.4;
+  const FRAME_HEIGHT = 0.5;
+  const FRAME_Y = 0.4;
+  // How far inside the tile rect the hull is kept, so it never rides over
+  // the frame or off the tiles.
+  const EDGE_MARGIN = 1.2;
+  // Small gap kept between the frame and the screen edge so the whole box
+  // is always visible.
+  const FIT_MARGIN = 0.96;
 
   // Camera rig: fixed orthographic iso-NE view aimed at the arena center.
   // Same yaw/pitch as hexa-turnos (yaw=π/4, pitch=atan(1/√2)≈35.26°) so the
@@ -37,22 +54,18 @@
   const CAM_OFF_Y = ORBIT_RADIUS * Math.sin(PITCH);
   const CAM_OFF_Z = Math.cos(YAW) * ORBIT_RADIUS * Math.cos(PITCH);
 
-  // Size the arena to the viewport — at mount AND on every resize, so the
-  // sea always fills the current window (fullscreen included). Regenerating
-  // is safe: cell colors are a deterministic hash of (q, r), so tiles that
-  // survive a resize keep their color, and the movement clamp pulls the sub
-  // back in if the arena shrinks around it. On the ground plane 1 px maps
-  // to 1/zoom world units horizontally and 1/(zoom·sin(pitch)) along the
-  // depth axis.
-  $effect(() => {
-    const update = () => {
-      halfU = window.innerWidth / (2 * BASE_ZOOM);
-      halfV = window.innerHeight / (2 * BASE_ZOOM * Math.sin(PITCH));
-    };
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  });
+  // On-screen half-extents of the FRAME box (not just the flat y=0 rect),
+  // used by the zoom-fit so the raised rails never clip. Under yaw=45° the
+  // world +Y axis projects to pure screen-up, so only the VERTICAL term
+  // gains the frame's height/elevation (via cos·pitch) and its half-
+  // thickness (via sin·pitch); screen-right (u) gains only the wall's own
+  // half-thickness. Budgeting the taller top extent on both sides is
+  // slightly conservative but guarantees no clip on any aspect ratio.
+  const FRAME_HALF_THICKNESS = FRAME_THICKNESS / 2;
+  const FIT_HALF_H = FRAME_U + FRAME_HALF_THICKNESS;
+  const FIT_HALF_V =
+    Math.sin(PITCH) * (FRAME_V + FRAME_HALF_THICKNESS) +
+    Math.cos(PITCH) * (FRAME_Y + FRAME_HEIGHT / 2);
 
   // $state.raw — three.js mutates cam.quaternion etc. internally on every
   // lookAt/render. A deep $state Proxy would treat each of those as reactive
@@ -67,24 +80,43 @@
     cam.lookAt(0, 0, 0);
   });
 
-  // No zoom-fit needed: the arena re-fits ITSELF to the viewport (effect
-  // above), so the camera zoom is simply constant at BASE_ZOOM.
+  // Zoom-to-fit: pick the largest zoom that still shows the WHOLE fixed
+  // frame (with FIT_MARGIN breathing room) in both screen axes. On the
+  // ground plane 1 px maps to 1/zoom world units horizontally and
+  // 1/(zoom·sin(pitch)) along the depth axis. Re-fit on resize so the arena
+  // stays fully framed at any window size (bigger window → bigger tiles, not
+  // more tiles). Imperative + updateProjectionMatrix for immediate effect.
+  $effect(() => {
+    const c = cam;
+    if (!c) return;
+    const fit = () => {
+      c.zoom =
+        FIT_MARGIN *
+        Math.min(
+          window.innerWidth / (2 * FIT_HALF_H),
+          window.innerHeight / (2 * FIT_HALF_V)
+        );
+      c.updateProjectionMatrix();
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  });
 
   // Shadow frustum: the default directional-light shadow camera only covers
-  // ±5 world units — the sub would lose its shadow past the arena center.
-  // Widen it to cover the whole arena (and bump the map so it stays crisp).
+  // ±5 world units — the sub would lose its shadow across most of the arena.
+  // Widen it to the arena's axis-aligned world half-extent.
   $effect(() => {
     const l = dirLight;
     if (!l) return;
     const sc = l.shadow.camera;
-    // Axis-aligned world half-extent of the rotated arena rectangle.
-    const extent = (halfU + halfV) * Math.SQRT1_2 + 3;
+    const extent = (FRAME_U + FRAME_V) * Math.SQRT1_2 + 3;
     sc.left = -extent;
     sc.right = extent;
     sc.top = extent;
     sc.bottom = -extent;
     sc.updateProjectionMatrix();
-    l.shadow.mapSize.set(1024, 1024);
+    l.shadow.mapSize.set(2048, 2048);
     if (l.shadow.map) {
       l.shadow.map.dispose();
       l.shadow.map = null;
@@ -189,8 +221,8 @@
     // walls instead of gluing it to them.
     const u = (game.x - game.z) * Math.SQRT1_2;
     const v = (game.x + game.z) * Math.SQRT1_2;
-    const uLim = halfU - EDGE_MARGIN;
-    const vLim = halfV - EDGE_MARGIN;
+    const uLim = ARENA_HALF_U - EDGE_MARGIN;
+    const vLim = ARENA_HALF_V - EDGE_MARGIN;
     const cu = Math.max(-uLim, Math.min(uLim, u));
     const cv = Math.max(-vLim, Math.min(vLim, v));
     if (cu !== u || cv !== v) {
@@ -212,14 +244,14 @@
   bind:ref={cam}
   makeDefault
   position={[CAM_OFF_X, CAM_OFF_Y, CAM_OFF_Z]}
-  zoom={BASE_ZOOM}
+  zoom={30}
   near={0.1}
   far={500}
 />
 
 <T.AmbientLight intensity={0.6} />
-<!-- Static light: with a fixed arena, the default target at the origin is
-     exactly right — the light direction never needs to change. -->
+<!-- Static light: with a fixed arena centered at the origin, the default
+     target at the origin is exactly right. -->
 <T.DirectionalLight
   bind:ref={dirLight}
   position={[10, 20, 10]}
@@ -228,7 +260,16 @@
 />
 <T.HemisphereLight args={['#ffe9c2', '#3a2a1a', 0.4]} />
 
-<Board {halfU} {halfV} tileSize={TILE_SIZE} seed={7} />
+<Board halfU={ARENA_HALF_U} halfV={ARENA_HALF_V} tileSize={TILE_SIZE} seed={7} />
+
+<!-- The box that frames the play area. -->
+<ArenaFrame
+  halfU={FRAME_U}
+  halfV={FRAME_V}
+  thickness={FRAME_THICKNESS}
+  height={FRAME_HEIGHT}
+  y={FRAME_Y}
+/>
 
 <!-- Foam-streak particle field over the arena — ambient sea current. -->
 <OceanCurrents
@@ -237,7 +278,7 @@
   headingX={CURRENT.x}
   headingZ={CURRENT.z}
   y={0.5}
-  radius={Math.max(halfU, halfV)}
+  radius={(ARENA_HALF_U + ARENA_HALF_V) * Math.SQRT1_2}
 />
 
 <Submarine
