@@ -20,7 +20,9 @@
     // rotation.y. With heading = θ, the bow (local -Z) points at world
     // (-sin θ, -cos θ) — the parent integrates position with that formula.
     heading = 0,
-    // True while the parent physics reports non-zero speed. Drives the wake.
+    // True while the parent physics reports FORWARD way (not reverse — the
+    // wake renders at the stern, and foam at the leading edge while backing
+    // up would read as wrong). Drives the wake.
     moving = false,
     // When true, the sub is below the waterline: hull renders as a
     // translucent dark silhouette, the conning tower / vela disappear, and

@@ -1,6 +1,10 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core';
-  import type { OrthographicCamera as ThreeOrthoCam } from 'three';
+  import type {
+    DirectionalLight as ThreeDirLight,
+    Object3D as ThreeObject3D,
+    OrthographicCamera as ThreeOrthoCam,
+  } from 'three';
   import Board from './Board.svelte';
   import Submarine from './Submarine.svelte';
   import OceanCurrents from './OceanCurrents.svelte';
@@ -26,6 +30,28 @@
   // lookAt/render. A deep $state Proxy would treat each of those as reactive
   // mutations and infinite-loop the reactive graph.
   let cam = $state.raw<ThreeOrthoCam | undefined>(undefined);
+  let dirLight = $state.raw<ThreeDirLight | undefined>(undefined);
+  let lightTarget = $state.raw<ThreeObject3D | undefined>(undefined);
+
+  // The camera's ORIENTATION is constant (position and lookAt target share
+  // the same offset), so a single lookAt on mount pins the iso view; from
+  // then on the template's reactive position just translates the camera.
+  // Keeping the position template-reactive (instead of imperative in
+  // useTask) means camera and submarine update in the SAME Svelte flush —
+  // no one-frame lag between them.
+  $effect(() => {
+    if (!cam) return;
+    cam.lookAt(cam.position.x - CAM_OFF_X, 0, cam.position.z - CAM_OFF_Z);
+  });
+
+  // DirectionalLight aims at .target (default: a detached Object3D pinned at
+  // the world origin). Without re-targeting, sailing away from the origin
+  // would slowly tilt the light toward the horizon and break the shadows.
+  // The target Object3D lives in the scene graph (template below) and
+  // follows the sub, keeping the light direction constant everywhere.
+  $effect(() => {
+    if (dirLight && lightTarget) dirLight.target = lightTarget;
+  });
 
   // --- Movement tuning ---
   const TURN_RATE = 1.8; // rad/s
@@ -82,11 +108,24 @@
           break;
       }
     };
+    // If the window loses focus mid-press (alt-tab, click outside), the
+    // matching keyup never arrives and the sub would sail on its own.
+    // Reset everything on blur / tab-hide.
+    const resetKeys = () => {
+      keys.up = keys.down = keys.left = keys.right = false;
+    };
+    const onVisibility = () => {
+      if (document.hidden) resetKeys();
+    };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', resetKeys);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', resetKeys);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   });
 
@@ -106,15 +145,9 @@
     const fwdZ = -Math.cos(game.heading);
     game.x += fwdX * speed * delta;
     game.z += fwdZ * speed * delta;
-    game.moving = Math.abs(speed) > 0.01;
-
-    // Camera follows the sub with a constant iso offset. Imperative (not
-    // template-reactive) so position + lookAt always update atomically in
-    // the same frame.
-    if (cam) {
-      cam.position.set(game.x + CAM_OFF_X, CAM_OFF_Y, game.z + CAM_OFF_Z);
-      cam.lookAt(game.x, 0, game.z);
-    }
+    // Forward way only: the wake renders at the stern, so backing up must
+    // not build it (foam at the leading edge would read as wrong).
+    game.moving = speed > 0.01;
   });
 
   // --- Board sizing + re-centering ---
@@ -141,9 +174,19 @@
   // Re-center the hex disc on whichever hex the submarine is over. The cell
   // colors are a deterministic hash of (q, r, seed), so re-centering doesn't
   // make the sea flicker — the illusion of an infinite ocean.
-  const boardCenter = $derived.by(() => {
+  //
+  // These MUST be primitive (number) deriveds, not one {q, r} object: they
+  // recompute every frame while the sub moves, but the ===-equality cutoff
+  // on primitives stops propagation, so Board's buildBoard/color work only
+  // re-runs when the sub actually crosses a hex boundary. An object derived
+  // would have fresh identity each frame and re-trigger it all at 60fps.
+  const centerQ = $derived.by(() => {
     const c = worldToAxial(game.x, game.z, TILE_SIZE);
-    return axialRound(c.q, c.r);
+    return axialRound(c.q, c.r).q;
+  });
+  const centerR = $derived.by(() => {
+    const c = worldToAxial(game.x, game.z, TILE_SIZE);
+    return axialRound(c.q, c.r).r;
   });
 
   // Fixed ambient current direction (world-space): foam streaks drift
@@ -161,20 +204,18 @@
 />
 
 <T.AmbientLight intensity={0.6} />
+<!-- The light and its aim target both follow the sub with constant offsets,
+     so the light DIRECTION (and the shadows) never change as it sails. -->
+<T.Object3D bind:ref={lightTarget} position={[game.x, 0, game.z]} />
 <T.DirectionalLight
+  bind:ref={dirLight}
   position={[10 + game.x, 20, 10 + game.z]}
   intensity={1.2}
   castShadow
 />
 <T.HemisphereLight args={['#ffe9c2', '#3a2a1a', 0.4]} />
 
-<Board
-  centerQ={boardCenter.q}
-  centerR={boardCenter.r}
-  {radius}
-  tileSize={TILE_SIZE}
-  seed={7}
-/>
+<Board {centerQ} {centerR} {radius} tileSize={TILE_SIZE} seed={7} />
 
 <!-- Foam-streak particle field around the sub — ambient sea current. -->
 <OceanCurrents

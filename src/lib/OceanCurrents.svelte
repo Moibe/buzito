@@ -144,8 +144,14 @@
   });
 </script>
 
+<!-- frustumCulled off: the particles live in WORLD coords far from the
+     mesh's (never-recomputed) bounding sphere at the origin — with culling
+     on, the whole foam field vanishes once the sub sails away from spawn.
+     70 single-triangle instances always surround the camera target anyway,
+     so culling buys nothing here. -->
 <T.InstancedMesh
   bind:ref={meshRef}
   args={[geometry, material, count]}
   renderOrder={1}
+  frustumCulled={false}
 />

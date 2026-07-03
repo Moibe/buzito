@@ -7,7 +7,7 @@
     MeshStandardMaterial,
     Object3D,
   } from 'three';
-  import { buildBoard } from './hex';
+  import { buildBoard, type HexCell } from './hex';
 
   let {
     centerQ = 0,
@@ -24,9 +24,12 @@
   } = $props();
 
   const TILE_HEIGHT = 0.4;
-  // Upper bound on simultaneous instances. The viewport-fit radius caps cell
-  // count well below this in practice (~1500 at 1080p, ~2200 at 4K).
-  const MAX_INSTANCES = 5000;
+  // Upper bound on simultaneous instances. The viewport-fit radius yields
+  // ~1600 cells at 1080p, ~2800 at 1440p and ~5700 at 4K/DPR-1 (radius 43);
+  // 8000 covers up to radius ~50 with headroom. Everything that touches the
+  // instance buffer clamps to this anyway — exceeding it must never write
+  // past the buffer or draw garbage instances.
+  const MAX_INSTANCES = 8000;
   const WAVE_AMP = 0.06;
   const WAVE_FREQ = 1.4;
   const WAVE_SPATIAL = 0.35;
@@ -51,6 +54,10 @@
   const tmpColor = new Color();
 
   let elapsed = 0;
+  // Identity guard for the color pass: cells only gets a NEW array when the
+  // board actually re-centers (the parent passes primitive centerQ/centerR,
+  // whose equality cutoff stops per-frame churn).
+  let lastCells: HexCell[] | null = null;
 
   function waveAt(x: number, z: number): number {
     return WAVE_AMP * Math.sin(elapsed * WAVE_FREQ + (x + z) * WAVE_SPATIAL);
@@ -59,16 +66,34 @@
   // Per-frame: update instance matrices for the sea wave. The bounding sphere
   // must follow the instances — the board re-centers around the submarine far
   // from the origin, and a stale sphere would get the whole mesh frustum-culled.
+  //
+  // Colors are written HERE too (not in an $effect) so that on a re-center
+  // frame the matrices and the colors update atomically — an effect would
+  // flush on a different tick and the ocean pattern would jump one hex for
+  // a single frame at every boundary crossing.
   useTask((delta) => {
     elapsed += delta;
     const inst = instancedRef;
     if (!inst) return;
 
-    if (inst.count !== cells.length) {
-      inst.count = cells.length;
+    // Clamp to buffer capacity: setMatrixAt/setColorAt past MAX_INSTANCES
+    // silently drop writes while the renderer would still try to draw
+    // inst.count instances from out-of-bounds attribute data.
+    const n = Math.min(cells.length, MAX_INSTANCES);
+    if (inst.count !== n) {
+      inst.count = n;
     }
 
-    for (let i = 0; i < cells.length; i++) {
+    if (lastCells !== cells) {
+      lastCells = cells;
+      for (let i = 0; i < n; i++) {
+        tmpColor.set(cells[i].color);
+        inst.setColorAt(i, tmpColor);
+      }
+      if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+    }
+
+    for (let i = 0; i < n; i++) {
       const cell = cells[i];
       dummy.position.set(cell.x, cell.height / 2 + waveAt(cell.x, cell.z), cell.z);
       dummy.rotation.set(0, 0, 0);
@@ -78,18 +103,6 @@
     }
     inst.instanceMatrix.needsUpdate = true;
     inst.computeBoundingSphere();
-  });
-
-  // Per-instance colors. Runs only when cells change (board re-centered),
-  // NOT every frame. Each cell keeps its deterministic ocean tone.
-  $effect(() => {
-    const inst = instancedRef;
-    if (!inst) return;
-    for (let i = 0; i < cells.length; i++) {
-      tmpColor.set(cells[i].color);
-      inst.setColorAt(i, tmpColor);
-    }
-    if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
   });
 </script>
 

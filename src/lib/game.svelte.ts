@@ -7,7 +7,8 @@ export const game = $state({
   z: 0,
   // rotation.y. With heading = θ, the bow points at world (-sin θ, -cos θ).
   heading: 0,
-  // True while the physics reports non-zero speed. Drives the wake.
+  // True while the physics reports forward way (reverse doesn't count —
+  // the stern wake must not build while backing up). Drives the wake.
   moving: false,
   // Below the waterline? Toggled by the HUD button and the Space key.
   submerged: false,
