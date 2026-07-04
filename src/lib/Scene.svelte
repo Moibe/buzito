@@ -286,70 +286,135 @@
     })
   );
 
-  // --- Cargo enemy: patrols left↔right (the screen u axis), bouncing at the
-  // edges. It only patrols while ACTIVE (toggle it from its context menu). ---
+  // --- Enemy motion ---
+  // Static enemies (warship/tanker/submarineIx) keep their own q/r glide
+  // driver; we mirror their LIVE world position here via onAnimate so the
+  // status ring and context menu track them as they glide toward a target.
+  const livePos = $state<Record<string, { x: number; z: number }>>(
+    Object.fromEntries(
+      game.enemies
+        .filter((e) => e.type !== 'cargo')
+        .map((e) => {
+          const w = axialToWorld(e.q, e.r, TILE_SIZE);
+          return [e.id, { x: w.x, z: w.z }];
+        })
+    )
+  );
+  function reportLive(id: string, x: number, z: number) {
+    const p = livePos[id];
+    if (p) {
+      p.x = x;
+      p.z = z;
+    }
+  }
+
+  // Cargo: pure renderer driven from here. Patrols left↔right (the screen u
+  // axis) while ACTIVE; a manual "Mover" target overrides the patrol until
+  // reached, then the patrol resumes at the new row.
   const cargoSpawn = (() => {
     const c = game.enemies.find((e) => e.type === 'cargo');
     return c ? axialToWorld(c.q, c.r, TILE_SIZE) : { x: 0, z: 0 };
   })();
-  // The cargo moves only along u (screen-right); its v (screen-depth row) is
-  // fixed at its spawn.
-  const CARGO_V = (cargoSpawn.x + cargoSpawn.z) * Math.SQRT1_2;
-  const CARGO_SPEED = 2.0; // world units/s
+  const CARGO_SPEED = 2.0; // patrol speed
+  const CARGO_MOVE_SPEED = 3.0; // manual relocation glide speed
   const CARGO_MARGIN = 2.0; // bounce this far in from the arena edge
-  const CARGO_ROT_LERP = 6; // how fast it swings around at a wall
-  let cargoU = $state((cargoSpawn.x - cargoSpawn.z) * Math.SQRT1_2);
+  const CARGO_ROT_LERP = 6;
+  let cargoX = $state(cargoSpawn.x);
+  let cargoZ = $state(cargoSpawn.z);
+  let cargoHeading = $state(-Math.PI / 4);
   let cargoDir = 1; // +1 → +u (right), −1 → −u (left)
-  let cargoHeading = $state(-Math.PI / 4); // faces +u
   let cargoMoving = $state(false);
-  const cargoX = $derived((cargoU + CARGO_V) * Math.SQRT1_2);
-  const cargoZ = $derived((CARGO_V - cargoU) * Math.SQRT1_2);
+  let cargoMoveTarget: { x: number; z: number } | null = null;
 
-  // Enemy AI + keep the open context menu anchored to the selected enemy
-  // (follows the cargo as it moves).
+  // Placement clamp so a vehicle can't be sent into/through the frame.
+  const PLACE_MARGIN = 2.0;
+  function clampToArena(x: number, z: number) {
+    const u = (x - z) * Math.SQRT1_2;
+    const v = (x + z) * Math.SQRT1_2;
+    const uL = ARENA_HALF_U - PLACE_MARGIN;
+    const vL = ARENA_HALF_V - PLACE_MARGIN;
+    const cu = Math.max(-uL, Math.min(uL, u));
+    const cv = Math.max(-vL, Math.min(vL, v));
+    return { x: (cu + cv) * Math.SQRT1_2, z: (cv - cu) * Math.SQRT1_2 };
+  }
+
+  // Sea click while in Move mode → relocate the selected vehicle to the click.
+  function onGroundClick(ev: { point: Vector3; stopPropagation?: () => void }) {
+    if (!game.moveMode || !game.selectedEnemyId) return;
+    ev.stopPropagation?.();
+    const e = game.enemies.find((x) => x.id === game.selectedEnemyId);
+    if (!e) return;
+    const p = clampToArena(ev.point.x, ev.point.z);
+    if (e.type === 'cargo') {
+      cargoMoveTarget = p;
+    } else {
+      // Fractional axial (no hex snap): axialToWorld(q,r) lands exactly on p,
+      // so the ship's own driver glides it precisely there.
+      const a = worldToAxial(p.x, p.z, TILE_SIZE);
+      e.q = a.q;
+      e.r = a.r;
+    }
+    game.moveMode = false;
+  }
+
   const projScratch = new Vector3();
   useTask((delta) => {
-    // Cargo patrol.
+    // --- Cargo motion (manual move target overrides patrol) ---
     const cargo = game.enemies.find((e) => e.type === 'cargo');
-    const patrolling = cargo?.active ?? false;
-    if (patrolling) {
+    let cargoTargetHeading = cargoHeading;
+    if (cargoMoveTarget) {
+      const dx = cargoMoveTarget.x - cargoX;
+      const dz = cargoMoveTarget.z - cargoZ;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 0.02) {
+        const step = Math.min(CARGO_MOVE_SPEED * delta, dist);
+        cargoX += (dx / dist) * step;
+        cargoZ += (dz / dist) * step;
+        cargoMoving = true;
+        cargoTargetHeading = Math.atan2(-dx, -dz);
+      } else {
+        cargoMoveTarget = null;
+        cargoMoving = false;
+      }
+    } else if (cargo?.active) {
+      // Patrol along u at the current row (v derived from the live position).
+      const u = (cargoX - cargoZ) * Math.SQRT1_2;
+      const v = (cargoX + cargoZ) * Math.SQRT1_2;
       const uLim = ARENA_HALF_U - CARGO_MARGIN;
-      let u = cargoU + cargoDir * CARGO_SPEED * delta;
-      if (u > uLim) {
-        u = uLim;
+      let nu = u + cargoDir * CARGO_SPEED * delta;
+      if (nu > uLim) {
+        nu = uLim;
         cargoDir = -1;
-      } else if (u < -uLim) {
-        u = -uLim;
+      } else if (nu < -uLim) {
+        nu = -uLim;
         cargoDir = 1;
       }
-      cargoU = u;
+      cargoX = (nu + v) * Math.SQRT1_2;
+      cargoZ = (v - nu) * Math.SQRT1_2;
+      cargoMoving = true;
+      cargoTargetHeading = cargoDir > 0 ? -Math.PI / 4 : (3 * Math.PI) / 4;
+    } else {
+      cargoMoving = false;
     }
-    cargoMoving = patrolling;
-    // Swing smoothly to face the travel direction instead of snapping 180°.
-    const targetHeading = cargoDir > 0 ? -Math.PI / 4 : (3 * Math.PI) / 4;
-    let diff = targetHeading - cargoHeading;
-    while (diff > Math.PI) diff -= 2 * Math.PI;
-    while (diff < -Math.PI) diff += 2 * Math.PI;
-    cargoHeading += diff * Math.min(delta * CARGO_ROT_LERP, 1);
+    let dh = cargoTargetHeading - cargoHeading;
+    while (dh > Math.PI) dh -= 2 * Math.PI;
+    while (dh < -Math.PI) dh += 2 * Math.PI;
+    cargoHeading += dh * Math.min(delta * CARGO_ROT_LERP, 1);
 
-    // Anchor the context menu to the selected enemy's LIVE screen position.
+    // --- Anchor the open context menu to the selected enemy's live screen
+    // position (follows a vehicle while it glides). ---
     const c = cam;
     const id = game.selectedEnemyId;
     if (c && id) {
       const e = game.enemies.find((x) => x.id === id);
       if (e) {
-        let wx: number, wz: number;
-        if (e.type === 'cargo') {
-          wx = cargoX;
-          wz = cargoZ;
-        } else {
-          const w = axialToWorld(e.q, e.r, TILE_SIZE);
-          wx = w.x;
-          wz = w.z;
-        }
+        const w =
+          e.type === 'cargo'
+            ? { x: cargoX, z: cargoZ }
+            : livePos[e.id] ?? axialToWorld(e.q, e.r, TILE_SIZE);
         c.updateMatrixWorld(true);
         c.matrixWorldInverse.copy(c.matrixWorld).invert();
-        projScratch.set(wx, 0, wz).project(c);
+        projScratch.set(w.x, 0, w.z).project(c);
         game.menuSx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
         game.menuSy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
       }
@@ -412,22 +477,56 @@
      gray when inactive. -->
 {#each enemyRender as { e, x, z } (e.id)}
   {@const isCargo = e.type === 'cargo'}
-  {@const rx = isCargo ? cargoX : x}
-  {@const rz = isCargo ? cargoZ : z}
+  {@const live = isCargo ? { x: cargoX, z: cargoZ } : (livePos[e.id] ?? { x, z })}
   {@const ringColor =
     e.id === game.selectedEnemyId ? '#ffd700' : e.active ? '#4ade80' : '#5b6b7a'}
-  <T.Mesh position={[rx, 0.44, rz]} rotation={[-Math.PI / 2, 0, 0]}>
+  <T.Mesh position={[live.x, 0.44, live.z]} rotation={[-Math.PI / 2, 0, 0]}>
     <T.RingGeometry args={[1.15, 1.5, 32]} />
     <T.MeshBasicMaterial color={ringColor} transparent opacity={0.85} depthWrite={false} />
   </T.Mesh>
 
   {#if e.type === 'warship'}
-    <Warship q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+    <Warship
+      q={e.q}
+      r={e.r}
+      tileSize={TILE_SIZE}
+      scale={SUB_SCALE}
+      onclick={() => selectEnemy(e.id)}
+      onAnimate={(ax, az) => reportLive(e.id, ax, az)}
+    />
   {:else if e.type === 'cargo'}
-    <Cargo x={cargoX} z={cargoZ} heading={cargoHeading} moving={cargoMoving} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+    <Cargo
+      x={cargoX}
+      z={cargoZ}
+      heading={cargoHeading}
+      moving={cargoMoving}
+      scale={SUB_SCALE}
+      onclick={() => selectEnemy(e.id)}
+    />
   {:else if e.type === 'tanker'}
-    <Tanker q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+    <Tanker
+      q={e.q}
+      r={e.r}
+      tileSize={TILE_SIZE}
+      scale={SUB_SCALE}
+      onclick={() => selectEnemy(e.id)}
+      onAnimate={(ax, az) => reportLive(e.id, ax, az)}
+    />
   {:else if e.type === 'submarineIx'}
-    <SubmarineIX q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+    <SubmarineIX
+      q={e.q}
+      r={e.r}
+      tileSize={TILE_SIZE}
+      scale={SUB_SCALE}
+      onclick={() => selectEnemy(e.id)}
+      onAnimate={(ax, az) => reportLive(e.id, ax, az)}
+    />
   {/if}
 {/each}
+
+<!-- Invisible sea plane: catches clicks on open water while in Move mode so
+     the selected vehicle can be relocated to the click point. -->
+<T.Mesh position={[0, 0.4, 0]} rotation={[-Math.PI / 2, 0, 0]} onclick={onGroundClick}>
+  <T.PlaneGeometry args={[140, 140]} />
+  <T.MeshBasicMaterial transparent opacity={0} depthWrite={false} />
+</T.Mesh>

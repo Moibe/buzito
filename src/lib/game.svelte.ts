@@ -37,11 +37,14 @@ export const game = $state({
   // menuMode: null = main card only, 'action' = the Acción submenu is open.
   selectedEnemyId: null as string | null,
   menuMode: null as null | 'action',
-  // Screen-space anchor for the HTML context menu, written by Scene each time
-  // the selection changes (the camera is static, so it only needs recomputing
-  // on select / resize).
+  // Screen-space anchor for the HTML context menu, written by Scene each
+  // frame while a menu is open (so it follows a moving vehicle).
   menuSx: 0,
   menuSy: 0,
+  // Move mode: after picking "Mover", the next click on the sea relocates the
+  // selected vehicle. The actual placement is applied in Scene, which has the
+  // world-space click point.
+  moveMode: false,
 });
 
 export function toggleSubmerged() {
@@ -66,9 +69,22 @@ export function selectEnemy(id: string) {
 export function closeEnemyMenu() {
   game.selectedEnemyId = null;
   game.menuMode = null;
+  game.moveMode = false;
 }
 
 export function toggleEnemyActive(id: string) {
   const e = game.enemies.find((x) => x.id === id);
   if (e) e.active = !e.active;
+}
+
+// Enter move mode for the currently selected vehicle: the menu hides and the
+// next sea click (handled in Scene) relocates it.
+export function startMove() {
+  if (!game.selectedEnemyId) return;
+  game.moveMode = true;
+  game.menuMode = null;
+}
+
+export function cancelMove() {
+  game.moveMode = false;
 }
