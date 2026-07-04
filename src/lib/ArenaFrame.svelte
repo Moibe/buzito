@@ -11,7 +11,7 @@
     thickness = 0.4,
     height = 0.5,
     y = 0.4,
-    color = '#cfe0ec',
+    color = '#ffd700',
   }: {
     halfU?: number;
     halfV?: number;
@@ -48,13 +48,13 @@
 {#each uEdges as pos}
   <T.Mesh position={pos} rotation={[0, U_ROT, 0]} castShadow receiveShadow>
     <T.BoxGeometry args={[thickness, height, lenAlongV]} />
-    <T.MeshStandardMaterial {color} flatShading />
+    <T.MeshBasicMaterial {color} />
   </T.Mesh>
 {/each}
 
 {#each vEdges as pos}
   <T.Mesh position={pos} rotation={[0, V_ROT, 0]} castShadow receiveShadow>
     <T.BoxGeometry args={[thickness, height, lenAlongU]} />
-    <T.MeshStandardMaterial {color} flatShading />
+    <T.MeshBasicMaterial {color} />
   </T.Mesh>
 {/each}

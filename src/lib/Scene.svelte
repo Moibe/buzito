@@ -8,8 +8,8 @@
   import Submarine from './Submarine.svelte';
   import OceanCurrents from './OceanCurrents.svelte';
   import ArenaFrame from './ArenaFrame.svelte';
-  import { axialToWorld } from './hex';
-  import { game, toggleSubmerged } from './game.svelte';
+  import { axialToWorld, worldToAxial, axialRound } from './hex';
+  import { game, toggleSubmerged, markCurrentTile } from './game.svelte';
 
   // Size of each hex in world units. Bigger TILE_SIZE → bigger tiles AND a
   // bigger submarine (SUB_SCALE tracks it), and — because the arena's world
@@ -37,18 +37,28 @@
 
   // Frame box dimensions — single source of truth, passed to <ArenaFrame>
   // AND used by the zoom-fit below so the 3D rails are budgeted for.
-  const FRAME_THICKNESS = 0.4;
-  const FRAME_HEIGHT = 0.5;
-  const FRAME_Y = 0.4;
+  //
+  // The frame is a WIDE band that OVERLAPS the ragged outer tile edge rather
+  // than sitting in a gap beyond it. A hex tiling can't meet a straight line
+  // cleanly — its boundary zigzags — so a thin frame would leave triangular
+  // gaps inside it (and any tile poking past a thin frame would show on the
+  // near side). Instead: the outer face sits a hair past the outermost tile
+  // body (nothing pokes out), and the band reaches ~1.8 INWARD, over the
+  // zigzag, so the sea reads solid right up to the frame with no gaps.
+  // The box also dips below the waterline (y spans −0.05..0.65) so no
+  // background shows under its outer lip.
+  const FRAME_THICKNESS = 0.15;
+  const FRAME_HEIGHT = 0.06;
+  const FRAME_Y = 0.23;
   const FRAME_HALF_THICKNESS = FRAME_THICKNESS / 2;
 
-  // The frame sits just outside the outermost tiles. A pointy-top hex body
-  // bleeds (√3+1)/(2√2)·tileSize ≈ 0.966·tileSize past its center along u/v;
-  // the wall's inner face must clear that, so margin ≥ bleed + thickness/2.
+  // A pointy-top hex body bleeds (√3+1)/(2√2)·tileSize ≈ 0.966·tileSize past
+  // its center along u/v; the outermost tile centers reach ~ARENA_HALF, so
+  // tile bodies reach ARENA_HALF + HEX_BLEED. Put the frame's OUTER face a
+  // hair past that (+0.15), then let the thickness extend the band inward.
   const HEX_BLEED = 0.966 * TILE_SIZE;
-  const FRAME_MARGIN = HEX_BLEED + FRAME_HALF_THICKNESS + 0.1;
-  const FRAME_U = ARENA_HALF_U + FRAME_MARGIN;
-  const FRAME_V = ARENA_HALF_V + FRAME_MARGIN;
+  const FRAME_U = ARENA_HALF_U + HEX_BLEED + 0.15 - FRAME_HALF_THICKNESS;
+  const FRAME_V = ARENA_HALF_V + HEX_BLEED + 0.15 - FRAME_HALF_THICKNESS;
 
   // How far inside the tile rect the hull center is kept, so the (larger)
   // hull never rides over the frame or off the tiles.
@@ -166,10 +176,10 @@
           e.preventDefault();
           break;
         case ' ':
-          // Ignore auto-repeat: holding Space must not strobe the ballast
-          // tanks. preventDefault also stops a focused HUD button from
-          // being re-activated by the browser's default Space handling.
-          if (!e.repeat) toggleSubmerged();
+          if (!e.repeat) {
+            markCurrentTile();
+            toggleSubmerged();
+          }
           e.preventDefault();
           break;
       }
@@ -245,6 +255,13 @@
     // Forward way only: the wake renders at the stern, so backing up must
     // not build it (foam at the leading edge would read as wrong).
     game.moving = speed > 0.01;
+
+    // Keep current tile in sync so the HUD button can mark without
+    // importing hex math.
+    const raw = worldToAxial(game.x, game.z, TILE_SIZE);
+    const ax = axialRound(raw.q, raw.r);
+    game.currentTileQ = ax.q;
+    game.currentTileR = ax.r;
   });
 
   // Fixed ambient current direction (world-space): foam streaks drift
@@ -272,21 +289,9 @@
 />
 <T.HemisphereLight args={['#ffe9c2', '#3a2a1a', 0.4]} />
 
-<Board halfU={ARENA_HALF_U} halfV={ARENA_HALF_V} tileSize={TILE_SIZE} seed={7} />
+<Board halfU={ARENA_HALF_U} halfV={ARENA_HALF_V} tileSize={TILE_SIZE} seed={7} visited={game.visited} visitedCount={game.visitedCount} />
 
-<!-- Sea fill: a flat ocean sheet just below the tile tops, spanning the
-     whole arena (out to under the frame walls). It backs the zigzag boundary
-     where the hex tiling meets the straight frame, so those edge gaps read
-     as deeper sea instead of showing the page background. Invisible in the
-     interior — it sits below every wave-bobbed hex top (min top ≈ 0.34, sheet
-     top = 0.32) — and its own edges are hidden under the opaque frame rails.
-     Rotated π/4 so it aligns with the arena's screen-space u/v rectangle. -->
-<T.Mesh position={[0, 0.31, 0]} rotation={[0, Math.PI / 4, 0]} receiveShadow>
-  <T.BoxGeometry args={[2 * FRAME_U, 0.02, 2 * FRAME_V]} />
-  <T.MeshStandardMaterial color="#1e5f8a" flatShading />
-</T.Mesh>
-
-<!-- The box that frames the play area. -->
+<!-- The wide band that frames the play area and hides the ragged tile edge. -->
 <ArenaFrame
   halfU={FRAME_U}
   halfV={FRAME_V}

@@ -8,84 +8,75 @@
     Object3D,
   } from 'three';
   import { buildBoardIsoRect, type HexCell } from './hex';
+  import { game } from './game.svelte';
 
-  // Fixed rectangular arena aligned to the iso camera's screen axes (see
-  // buildBoardIsoRect). halfU/halfV are half-extents in world units along
-  // screen-right / screen-depth.
   let {
     halfU = 18,
     halfV = 18,
     tileSize = 1,
     seed = 1,
+    visited = undefined as Set<string> | undefined,
+    visitedCount = 0,
   }: {
     halfU?: number;
     halfV?: number;
     tileSize?: number;
     seed?: number;
+    visited?: Set<string>;
+    visitedCount?: number;
   } = $props();
 
   const TILE_HEIGHT = 0.4;
-  // Upper bound on simultaneous instances. The arena is a FIXED
-  // screen-aligned rectangle (halfU=halfV=20 → ~615 tiles), independent of
-  // window size; 8000 leaves large headroom if the arena is ever enlarged.
-  // Every write to the instance buffer clamps to this (see below), so
-  // exceeding it never writes past the buffer or draws garbage instances.
   const MAX_INSTANCES = 8000;
   const WAVE_AMP = 0.06;
   const WAVE_FREQ = 1.4;
   const WAVE_SPATIAL = 0.35;
+  // Color for tiles the sub has visited.
+  const VISITED_COLOR = '#b8864e';
 
   const cells = $derived(
     buildBoardIsoRect(halfU, halfV, tileSize, seed, TILE_HEIGHT)
   );
 
-  // Shared geometry + material — one of each across all instances. This is
-  // the core of the InstancedMesh win: 1 draw call instead of N. The default
-  // CylinderGeometry has its first vertex at +Z, giving pointy-top orientation
-  // that matches the axialToWorld pointy-top spacing.
+  // Expose total tile count to the HUD via shared state.
+  $effect(() => {
+    game.totalTiles = cells.length;
+  });
+
   const geometry = $derived(new CylinderGeometry(tileSize, tileSize, TILE_HEIGHT, 6));
   const material = new MeshStandardMaterial({ flatShading: true });
 
-  // $state.raw on three.js refs — deep $state Proxy on a three.js object
-  // causes infinite reactivity loops via internal mutations.
   let instancedRef = $state.raw<InstancedMesh | undefined>(undefined);
 
-  // Reused scratch objects so we don't allocate per-frame.
   const dummy = new Object3D();
   const tmpColor = new Color();
 
   let elapsed = 0;
-  // Identity guard for the color pass: cells only gets a NEW array when the
-  // fixed arena half-extents (halfU/halfV) change — the colors are rewritten
-  // only then, not per frame.
   let lastCells: HexCell[] | null = null;
+  let lastVisitedCount = -1;
 
   function waveAt(x: number, z: number): number {
     return WAVE_AMP * Math.sin(elapsed * WAVE_FREQ + (x + z) * WAVE_SPATIAL);
   }
 
-  // Per-frame: update instance matrices for the sea wave, keeping the
-  // bounding sphere in sync with the instances.
-  //
-  // Colors are written HERE too (not in an $effect) so that when the cell
-  // set changes, matrices and colors update atomically in the same frame.
   useTask((delta) => {
     elapsed += delta;
     const inst = instancedRef;
     if (!inst) return;
 
-    // Clamp to buffer capacity: setMatrixAt/setColorAt past MAX_INSTANCES
-    // silently drop writes while the renderer would still try to draw
-    // inst.count instances from out-of-bounds attribute data.
     const n = Math.min(cells.length, MAX_INSTANCES);
     if (inst.count !== n) {
       inst.count = n;
     }
 
-    if (lastCells !== cells) {
+    // Re-upload colors when the cell set or the visited set changes.
+    if (lastCells !== cells || lastVisitedCount !== visitedCount) {
       lastCells = cells;
+      lastVisitedCount = visitedCount;
       for (let i = 0; i < n; i++) {
-        tmpColor.set(cells[i].color);
+        const c = cells[i];
+        const isVisited = visited?.has(`${c.q},${c.r}`) ?? false;
+        tmpColor.set(isVisited ? VISITED_COLOR : c.color);
         inst.setColorAt(i, tmpColor);
       }
       if (inst.instanceColor) inst.instanceColor.needsUpdate = true;

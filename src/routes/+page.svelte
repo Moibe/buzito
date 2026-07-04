@@ -1,12 +1,11 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core';
   import Scene from '$lib/Scene.svelte';
-  import { game, toggleSubmerged } from '$lib/game.svelte';
+  import { game, toggleSubmerged, markCurrentTile } from '$lib/game.svelte';
 
   function onDiveClick(e: MouseEvent) {
+    markCurrentTile();
     toggleSubmerged();
-    // Blur so a later Space press only toggles via the keyboard handler,
-    // instead of ALSO re-activating this (still focused) button.
     (e.currentTarget as HTMLButtonElement).blur();
   }
 </script>
@@ -19,6 +18,7 @@
 
 <div class="hud">
   <div class="hint">← → girar · ↑ ↓ avanzar / reversa · Espacio: sumergir</div>
+  <div class="progress">{game.visitedCount} / {game.totalTiles}</div>
   <button class="dive-btn" class:submerged={game.submerged} onclick={onDiveClick}>
     {game.submerged ? '▲ Emerger' : '▼ Sumergir'}
   </button>
@@ -56,6 +56,12 @@
     color: rgba(255, 255, 255, 0.78);
     font: 500 13px/1.4 system-ui, sans-serif;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  }
+  .progress {
+    color: #ffd700;
+    font: 700 15px/1 system-ui, sans-serif;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    letter-spacing: 0.03em;
   }
   .dive-btn {
     background: rgba(10, 20, 30, 0.65);

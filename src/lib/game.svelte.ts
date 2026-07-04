@@ -1,19 +1,28 @@
-// Shared game state — the single source of truth for the submarine.
-// The Scene (inside <Canvas>) integrates x/z/heading from the keyboard in a
-// useTask; the HTML HUD (outside <Canvas>) reads/toggles `submerged`.
 export const game = $state({
-  // World position on the XZ plane.
   x: 0,
   z: 0,
-  // rotation.y. With heading = θ, the bow points at world (-sin θ, -cos θ).
   heading: 0,
-  // True while the physics reports forward way (reverse doesn't count —
-  // the stern wake must not build while backing up). Drives the wake.
   moving: false,
-  // Below the waterline? Toggled by the HUD button and the Space key.
   submerged: false,
+  // Current hex tile under the sub (updated every frame by Scene).
+  currentTileQ: 0,
+  currentTileR: 0,
+  // Visited tiles — keys are "q,r" strings.
+  visited: new Set<string>(),
+  visitedCount: 0,
+  // Set by Board once cells are computed.
+  totalTiles: 0,
 });
 
 export function toggleSubmerged() {
   game.submerged = !game.submerged;
+}
+
+// Mark the tile currently under the sub as visited.
+export function markCurrentTile() {
+  const key = `${game.currentTileQ},${game.currentTileR}`;
+  if (!game.visited.has(key)) {
+    game.visited.add(key);
+    game.visitedCount++;
+  }
 }
