@@ -4,20 +4,12 @@
   import {
     game,
     SUB_HP_MAX,
-    toggleSubmerged,
-    markCurrentTile,
     closeEnemyMenu,
     toggleEnemyActive,
     resetGame,
   } from '$lib/game.svelte';
 
   const hpPct = $derived((game.hp / SUB_HP_MAX) * 100);
-
-  function onDiveClick(e: MouseEvent) {
-    markCurrentTile();
-    toggleSubmerged();
-    (e.currentTarget as HTMLButtonElement).blur();
-  }
 
   // The enemy whose context menu is open (null = no menu).
   const selectedEnemy = $derived(
@@ -44,9 +36,6 @@
     (seleccionado + clic en el mar: mover)
   </div>
   <div class="progress">{game.visitedCount} / {game.totalTiles}</div>
-  <button class="dive-btn" class:submerged={game.submerged} onclick={onDiveClick}>
-    {game.submerged ? '▲ Emerger' : '▼ Sumergir'}
-  </button>
 </div>
 
 <!-- Submarine stats panel (top-left) — hull bar, hexa-turnos ShipStats style. -->
@@ -155,30 +144,6 @@
     font: 700 15px/1 system-ui, sans-serif;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     letter-spacing: 0.03em;
-  }
-  .dive-btn {
-    background: rgba(10, 20, 30, 0.65);
-    color: #ffd700;
-    border: 1px solid rgba(255, 215, 0, 0.6);
-    border-radius: 8px;
-    padding: 10px 16px;
-    font: 600 14px/1 system-ui, sans-serif;
-    cursor: pointer;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .dive-btn:hover {
-    background: rgba(10, 20, 30, 0.85);
-    border-color: rgba(255, 215, 0, 1);
-  }
-  .dive-btn:active {
-    transform: translateY(1px);
-  }
-  .dive-btn.submerged {
-    background: rgba(255, 215, 0, 0.18);
-    color: #fff3b8;
-    border-color: rgba(255, 215, 0, 0.9);
   }
 
   /* Enemy context menu (main card + submenu) — gold theme, same chrome as

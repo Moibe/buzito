@@ -10,7 +10,7 @@
 
   // Pure renderer: the parent owns the physics (a slow, erratic roamer). This
   // component only does bob/roll and a foam wake that builds while creeping.
-  // Model is the big tanker hull repurposed as a bombardment ship.
+  // Model is a heavy bombardment ship (large hull with a central bomb magazine).
   let {
     x = 0,
     z = 0,
