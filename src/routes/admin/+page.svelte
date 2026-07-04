@@ -9,7 +9,15 @@
     addEnemyToMission,
     removeEnemyFromMission,
     resetMissions,
+    adminSync,
   } from '$lib/game.svelte';
+
+  // Human text for the save-status indicator.
+  const saveText: Record<string, string> = {
+    saving: 'Guardando…',
+    saved: 'Guardado ✓',
+    error: 'Error al guardar — vuelve a entrar al admin',
+  };
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -97,6 +105,9 @@
               <span class="unit">%</span>
             </div>
           </div>
+          {#if adminSync.status !== 'idle'}
+            <span class="save-status {adminSync.status}">{saveText[adminSync.status]}</span>
+          {/if}
         </div>
       {:else if section === 'ciudades'}
         <header class="work-head">
@@ -128,6 +139,9 @@
           <div class="palette-head">
             <strong>Tipos de enemigos</strong>
             <span>Arrástralos a una misión para añadir uno</span>
+            {#if adminSync.status !== 'idle'}
+              <span class="save-status {adminSync.status}">{saveText[adminSync.status]}</span>
+            {/if}
             <button class="reset-btn" onclick={resetMissions}>↺ Restablecer</button>
           </div>
           <div class="palette-items">
@@ -436,6 +450,26 @@
   .setting-input .unit {
     color: rgba(255, 255, 255, 0.7);
     font-weight: 700;
+  }
+
+  /* Save-status indicator (server persistence feedback). */
+  .save-status {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+  .save-status.saving {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .save-status.saved {
+    background: rgba(74, 222, 128, 0.16);
+    color: #86efac;
+  }
+  .save-status.error {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
   }
 
   /* --- Enemy-type palette (drag source, for the future) --- */

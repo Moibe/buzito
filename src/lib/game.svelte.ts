@@ -135,19 +135,27 @@ export function applyServerSettings(
   if (isValidMissionEnemies(s.missionEnemies)) config.missionEnemies = s.missionEnemies;
 }
 
-// Persist the current admin-editable settings to the SERVER (fire-and-forget).
-// Only the admin ever calls the mutators below; the write endpoint is gated by
-// the admin cookie. No-op during SSR.
+// Save status the admin UI can show, so a failed write (e.g. expired session →
+// 401) is visible instead of silent.
+export const adminSync = $state<{ status: 'idle' | 'saving' | 'saved' | 'error' }>({
+  status: 'idle',
+});
+
+// Persist the current admin-editable settings to the SERVER. Only the admin
+// calls the mutators below; the write endpoint is gated by the admin cookie.
+// No-op during SSR.
 async function saveSettingsToServer() {
   if (typeof window === 'undefined') return;
+  adminSync.status = 'saving';
   try {
-    await fetch('/api/settings', {
+    const res = await fetch('/api/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ winPct: config.rules.winPct, missionEnemies: config.missionEnemies }),
     });
+    adminSync.status = res.ok ? 'saved' : 'error';
   } catch {
-    /* ignore network errors */
+    adminSync.status = 'error';
   }
 }
 
