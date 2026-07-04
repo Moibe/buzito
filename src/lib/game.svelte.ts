@@ -49,7 +49,7 @@ export const config = $state({
       speed: 0.9,
       salvoMin: 4.5,
       salvoMax: 8.5,
-      salvoSize: 4,
+      salvoSize: 1,
       bombDamage: 12,
       blastRadius: 2.2,
     },
