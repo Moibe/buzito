@@ -15,6 +15,7 @@
   import SubmarineIX from './SubmarineIX.svelte';
   import Cargo from './Cargo.svelte';
   import Bomber from './Bomber.svelte';
+  import Shark from './Shark.svelte';
   import Tracers from './Tracers.svelte';
   import { axialToWorld, worldToAxial, axialRound } from './hex';
   import {
@@ -313,7 +314,11 @@
     submarineIx: { behavior: 'patrol', margin: 2.0, rotLerp: 5 },
     // The bomber creeps to random spots and sits idle for long stretches.
     bomber: { behavior: 'roam', margin: 2.5, rotLerp: 3 },
+    shark: { behavior: 'patrol', margin: 2.0, rotLerp: 6 },
   };
+  // Enemy types that dive/surface at random (and stay hidden as translucent
+  // silhouettes while down).
+  const DIVING = new Set<EnemyType>(['submarineIx', 'shark']);
   const DYNAMIC = new Set<EnemyType>(Object.keys(MOVER_CFG) as EnemyType[]);
   // How long the bomber sits still between roams (random per idle).
   const ROAM_IDLE_MIN = 3.0;
@@ -339,12 +344,14 @@
     dir: number; // +1 / −1 along the patrol axis
     moving: boolean;
     moveTarget: { x: number; z: number } | null;
-    submerged: boolean; // only the U-boat toggles this
-    depthTimer: number; // seconds until the next depth flip (U-boat)
+    submerged: boolean; // U-boat / shark toggle this
+    depthTimer: number; // seconds until the next depth flip (U-boat / shark)
     roamTimer: number; // seconds of idle left before the next roam (bomber)
+    torpedoTimer: number; // seconds until the next torpedo (shark, while down)
   };
-  function randDepthTime() {
-    const c = config.enemies.submarineIx;
+  // Depth-segment duration for a diving type (U-boat or shark).
+  function randDepthTime(type: EnemyType) {
+    const c = type === 'shark' ? config.enemies.shark : config.enemies.submarineIx;
     return c.depthMin + Math.random() * (c.depthMax - c.depthMin);
   }
   function newMover(e: Enemy): Mover {
@@ -361,8 +368,9 @@
       moving: false,
       moveTarget: null,
       submerged: false,
-      depthTimer: randDepthTime(),
+      depthTimer: randDepthTime(e.type),
       roamTimer: ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN),
+      torpedoTimer: config.enemies.shark.torpedoInterval,
     };
   }
   const movers = $state<Record<string, Mover>>(
@@ -465,6 +473,7 @@
   $effect(() => {
     if (!game.gameOver) {
       for (const t of tracers) t.active = false;
+      for (const t of torpedoes) t.active = false;
       fireCooldown = 0;
       muzzleFlash = 0;
     }
@@ -568,6 +577,28 @@
       const ez = m.z - z;
       if (ex * ex + ez * ez < r2) e.hp -= dmg;
     }
+  }
+
+  // --- Shark torpedoes ---
+  // Straight-line underwater projectiles fired by a submerged shark in random
+  // directions. They cross the arena and only hit the sub when it is SUBMERGED
+  // (same depth) and in the line. A surface wake streak marks each one.
+  const TORPEDO_HIT_R2 = 0.6 * 0.6;
+  const TORPEDO_BOUND = (ARENA_HALF_U + ARENA_HALF_V) * Math.SQRT1_2 + 4; // exit
+  type Torpedo = { active: boolean; x: number; z: number; vx: number; vz: number };
+  const torpedoes = $state<Torpedo[]>(
+    Array.from({ length: 16 }, () => ({ active: false, x: 0, z: 0, vx: 0, vz: 0 }))
+  );
+  function launchTorpedo(x: number, z: number) {
+    const t = torpedoes.find((p) => !p.active);
+    if (!t) return;
+    const ang = Math.random() * Math.PI * 2;
+    const spd = config.enemies.shark.torpedoSpeed;
+    t.active = true;
+    t.x = x;
+    t.z = z;
+    t.vx = Math.cos(ang) * spd;
+    t.vz = Math.sin(ang) * spd;
   }
 
   // --- Health pickups ---
@@ -733,14 +764,26 @@
       while (dh < -Math.PI) dh += 2 * Math.PI;
       m.heading += dh * Math.min(delta * cfg.rotLerp, 1);
 
-      // U-boat only: randomly alternate submerged/surfaced stretches while
-      // active (its depth decides whether it can ram — see the ram loop).
-      if (e.type === 'submarineIx' && e.active) {
+      // Diving subs (U-boat / shark): randomly alternate submerged/surfaced
+      // stretches while active (depth decides whether they can ram).
+      if (DIVING.has(e.type) && e.active) {
         m.depthTimer -= delta;
         if (m.depthTimer <= 0) {
           m.submerged = !m.submerged;
-          m.depthTimer = randDepthTime();
+          m.depthTimer = randDepthTime(e.type);
         }
+      }
+
+      // Shark: while submerged, fire torpedoes in random directions.
+      if (e.type === 'shark' && e.active && m.submerged && !game.gameOver) {
+        m.torpedoTimer -= delta;
+        if (m.torpedoTimer <= 0) {
+          launchTorpedo(m.x, m.z);
+          m.torpedoTimer = config.enemies.shark.torpedoInterval;
+        }
+      } else if (e.type === 'shark') {
+        // Don't let the timer run down while surfaced; fire soon after diving.
+        m.torpedoTimer = Math.min(m.torpedoTimer, config.enemies.shark.torpedoInterval);
       }
     }
 
@@ -887,6 +930,26 @@
       if (!bl.active) continue;
       bl.t += delta;
       if (bl.t >= BLAST_DUR) bl.active = false;
+    }
+
+    // --- Advance torpedoes: straight line until they exit the arena; hit the
+    // sub only when it's SUBMERGED and in the path. ---
+    for (const t of torpedoes) {
+      if (!t.active) continue;
+      t.x += t.vx * delta;
+      t.z += t.vz * delta;
+      if (Math.abs(t.x) > TORPEDO_BOUND || Math.abs(t.z) > TORPEDO_BOUND) {
+        t.active = false;
+        continue;
+      }
+      if (game.submerged && !game.gameOver) {
+        const dx = t.x - game.x;
+        const dz = t.z - game.z;
+        if (dx * dx + dz * dz < TORPEDO_HIT_R2) {
+          t.active = false;
+          damageSub(config.enemies.shark.torpedoDamage, 'Un torpedo del Tiburón te alcanzó.');
+        }
+      }
     }
 
     // --- Remove enemies whose hull hit 0 (friendly fire), with a death puff.
@@ -1049,6 +1112,28 @@
       scale={SUB_SCALE}
       onclick={() => selectEnemy(e.id)}
     />
+  {:else if e.type === 'shark'}
+    {@const m = movers[e.id]}
+    <Shark
+      x={m.x}
+      z={m.z}
+      heading={m.heading}
+      moving={m.moving}
+      submerged={m.submerged}
+      scale={SUB_SCALE}
+      onclick={() => selectEnemy(e.id)}
+    />
+  {/if}
+{/each}
+
+<!-- Torpedoes: a bright wake streak on the surface marking each torpedo's
+     path (it only harms a SUBMERGED sub, but the wake shows it topside too). -->
+{#each torpedoes as t}
+  {#if t.active}
+    <T.Mesh position={[t.x, 0.46, t.z]} rotation={[0, Math.atan2(t.vx, t.vz), 0]}>
+      <T.BoxGeometry args={[0.1, 0.05, 0.7]} />
+      <T.MeshBasicMaterial color="#dff2f8" transparent opacity={0.8} depthWrite={false} toneMapped={false} />
+    </T.Mesh>
   {/if}
 {/each}
 

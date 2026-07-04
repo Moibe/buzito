@@ -1,4 +1,4 @@
-export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber';
+export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark';
 
 // A machine-gun tracer round (pooled; physics driven by Scene, drawn by
 // Tracers.svelte). y is a fixed gun height; velocity is world XZ.
@@ -53,6 +53,19 @@ export const config = $state({
       bombDamage: 12,
       blastRadius: 2.2,
     },
+    // Shark sub: dives/surfaces at random; while submerged, fires torpedoes in
+    // random 360° directions that cross the arena (hit the sub only if it's
+    // submerged and in the line).
+    shark: {
+      hp: 55,
+      ram: 14,
+      speed: 2.6,
+      depthMin: 2.0,
+      depthMax: 4.5,
+      torpedoInterval: 2.5, // seconds between torpedoes while submerged
+      torpedoDamage: 15,
+      torpedoSpeed: 7,
+    },
   },
 });
 
@@ -63,6 +76,7 @@ const SPAWN_DEFS: { id: string; type: EnemyType; name: string; q: number; r: num
   { id: 'cargo-1', type: 'cargo', name: 'Carguero', q: -5, r: 4 },
   { id: 'bomber-1', type: 'bomber', name: 'Bombardero', q: 2, r: 2 },
   { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3 },
+  { id: 'shark-1', type: 'shark', name: 'Tiburón', q: 0, r: -6 },
 ];
 
 function makeEnemies(): Enemy[] {
