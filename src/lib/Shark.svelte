@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core';
   import {
+    BackSide,
     BufferAttribute,
     BufferGeometry,
     DoubleSide,
@@ -149,7 +150,19 @@
   scale={[scale, scale, scale]}
 >
   {#if submerged}
-    <!-- Submerged silhouette: the shark body as a translucent dark shape. -->
+    <!-- Outline shells (inverted-hull): a slightly larger copy of each shape in
+         a bright edge color with BackSide, so a crisp contour rims the
+         translucent silhouette and it reads clearly underwater. -->
+    <T.Mesh scale={[0.35, 0.21, 1.06]} renderOrder={1}>
+      <T.SphereGeometry args={[1, 16, 12]} />
+      <T.MeshBasicMaterial color="#cfe0ea" side={BackSide} transparent opacity={0.9} depthWrite={false} />
+    </T.Mesh>
+    <T.Mesh position={[0, 0.16, -0.05]} rotation={[0, 0, -0.35]} scale={[0.26, 1.12, 1.12]} renderOrder={1}>
+      <T.ConeGeometry args={[0.17, 0.34, 3]} />
+      <T.MeshBasicMaterial color="#cfe0ea" side={BackSide} transparent opacity={0.9} depthWrite={false} />
+    </T.Mesh>
+
+    <!-- Submerged silhouette: the shark body as a translucent grey shape. -->
     <T.Mesh scale={[0.3, 0.18, 1.0]} renderOrder={2} onclick={handleClick}>
       <T.SphereGeometry args={[1, 16, 12]} />
       <T.MeshBasicMaterial color="#5a6570" transparent opacity={0.45} depthWrite={false} />
