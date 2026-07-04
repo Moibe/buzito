@@ -584,7 +584,6 @@
   // directions. They cross the arena and only hit the sub when it is SUBMERGED
   // (same depth) and in the line. A surface wake streak marks each one.
   const TORPEDO_HIT_R2 = 0.6 * 0.6;
-  const TORPEDO_BOUND = (ARENA_HALF_U + ARENA_HALF_V) * Math.SQRT1_2 + 4; // exit
   type Torpedo = { active: boolean; x: number; z: number; vx: number; vz: number };
   const torpedoes = $state<Torpedo[]>(
     Array.from({ length: 16 }, () => ({ active: false, x: 0, z: 0, vx: 0, vz: 0 }))
@@ -938,7 +937,11 @@
       if (!t.active) continue;
       t.x += t.vx * delta;
       t.z += t.vz * delta;
-      if (Math.abs(t.x) > TORPEDO_BOUND || Math.abs(t.z) > TORPEDO_BOUND) {
+      // Expire at the arena frame (a rectangle in the rotated u/v frame), NOT
+      // an axis-aligned x/z box — otherwise it stays visible past the frame.
+      const tu = (t.x - t.z) * Math.SQRT1_2;
+      const tv = (t.x + t.z) * Math.SQRT1_2;
+      if (Math.abs(tu) > FRAME_U || Math.abs(tv) > FRAME_V) {
         t.active = false;
         continue;
       }
