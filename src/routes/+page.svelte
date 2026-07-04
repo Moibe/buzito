@@ -85,6 +85,9 @@
     class="ctx-menu"
     style="left: {game.menuSx + 24}px; top: {game.menuSy - 30}px;"
     role="menu"
+    tabindex="-1"
+    onpointerenter={() => (game.menuHover = true)}
+    onpointerleave={() => (game.menuHover = false)}
   >
     <div class="ctx-title">{selectedEnemy.name}</div>
     <button class:active={game.menuMode === 'action'} onclick={() => (game.menuMode = 'action')}>
@@ -97,6 +100,9 @@
       class="ctx-menu submenu"
       style="left: {game.menuSx + 24 + 138}px; top: {game.menuSy - 30 + 60}px;"
       role="menu"
+      tabindex="-1"
+      onpointerenter={() => (game.menuHover = true)}
+      onpointerleave={() => (game.menuHover = false)}
     >
       <button
         onclick={() => {

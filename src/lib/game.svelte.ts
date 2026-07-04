@@ -75,6 +75,10 @@ export const game = $state({
   // frame while a menu is open (so it follows a moving vehicle).
   menuSx: 0,
   menuSy: 0,
+  // True while the pointer is over the menu — Scene pauses re-anchoring so the
+  // buttons hold still and clicks land (otherwise a moving vessel drags the
+  // menu out from under the cursor).
+  menuHover: false,
 });
 
 export function toggleSubmerged() {
@@ -94,11 +98,16 @@ export function markCurrentTile() {
 export function selectEnemy(id: string) {
   game.selectedEnemyId = id;
   game.menuMode = null; // always (re)open on the main card
+  game.menuHover = false; // resume following the newly selected vessel
 }
 
 export function closeEnemyMenu() {
   game.selectedEnemyId = null;
   game.menuMode = null;
+  // The menu often closes while the pointer is still over it (e.g. clicking
+  // an action), so its pointerleave never fires — clear the flag by hand or
+  // the next menu would open frozen.
+  game.menuHover = false;
 }
 
 export function toggleEnemyActive(id: string) {
