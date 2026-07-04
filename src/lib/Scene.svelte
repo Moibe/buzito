@@ -13,7 +13,7 @@
   import Warship from './Warship.svelte';
   import SubmarineIX from './SubmarineIX.svelte';
   import Cargo from './Cargo.svelte';
-  import Tanker from './Tanker.svelte';
+  import Bomber from './Bomber.svelte';
   import Tracers from './Tracers.svelte';
   import { axialToWorld, worldToAxial, axialRound } from './hex';
   import {
@@ -290,15 +290,13 @@
   const CURRENT = axialToWorld(1, -1, TILE_SIZE);
 
   // --- Enemy motion ---
-  // DYNAMIC enemies (cargo, warship, U-boat) are Scene-driven pure renderers
-  // whose continuous world position lives here. STATIC enemies (tanker) keep
-  // their own q/r glide driver and just mirror their live position back via
-  // onAnimate so their ring/menu track them.
-  const DYNAMIC = new Set<EnemyType>(['cargo', 'warship', 'submarineIx']);
-
-  // Patrol axis in the camera's ground frame: 'u' = left↔right (screen
-  // horizontal), 'v' = up↔down (screen depth). The U-boat patrols vertically.
+  // Every enemy is a Scene-driven pure renderer whose continuous world
+  // position lives here in `movers`.
+  //
+  // behavior: 'patrol' = bounce back and forth along an axis (u=horizontal,
+  // v=vertical). 'roam' = slow, erratic wander with long pauses (the bomber).
   type MoverCfg = {
+    behavior: 'patrol' | 'roam';
     patrolSpeed: number;
     moveSpeed: number;
     margin: number;
@@ -306,10 +304,16 @@
     axis: 'u' | 'v';
   };
   const MOVER_CFG: Record<string, MoverCfg> = {
-    cargo: { patrolSpeed: 2.0, moveSpeed: 3.0, margin: 2.0, rotLerp: 6, axis: 'u' },
-    warship: { patrolSpeed: 2.8, moveSpeed: 3.2, margin: 2.0, rotLerp: 6, axis: 'u' },
-    submarineIx: { patrolSpeed: 2.4, moveSpeed: 3.0, margin: 2.0, rotLerp: 5, axis: 'v' },
+    cargo: { behavior: 'patrol', patrolSpeed: 2.0, moveSpeed: 3.0, margin: 2.0, rotLerp: 6, axis: 'u' },
+    warship: { behavior: 'patrol', patrolSpeed: 2.8, moveSpeed: 3.2, margin: 2.0, rotLerp: 6, axis: 'u' },
+    submarineIx: { behavior: 'patrol', patrolSpeed: 2.4, moveSpeed: 3.0, margin: 2.0, rotLerp: 5, axis: 'v' },
+    // The bomber creeps to random spots and sits idle for long stretches.
+    bomber: { behavior: 'roam', patrolSpeed: 0, moveSpeed: 0.9, margin: 2.5, rotLerp: 3, axis: 'u' },
   };
+  const DYNAMIC = new Set<EnemyType>(Object.keys(MOVER_CFG) as EnemyType[]);
+  // How long the bomber sits still between roams (random per idle).
+  const ROAM_IDLE_MIN = 3.0;
+  const ROAM_IDLE_MAX = 8.0;
 
   // Resting/patrol heading for dir=+1 (the far direction along the axis) and
   // dir=−1. Bow = local −Z → forward = (−sinθ, −cosθ).
@@ -333,6 +337,7 @@
     moveTarget: { x: number; z: number } | null;
     submerged: boolean; // only the U-boat toggles this
     depthTimer: number; // seconds until the next depth flip (U-boat)
+    roamTimer: number; // seconds of idle left before the next roam (bomber)
   };
   const movers = $state<Record<string, Mover>>(
     Object.fromEntries(
@@ -352,34 +357,25 @@
               moveTarget: null,
               submerged: false,
               depthTimer: UBOAT_SEG_MIN + Math.random() * (UBOAT_SEG_MAX - UBOAT_SEG_MIN),
+              roamTimer: ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN),
             },
           ];
         })
     )
   );
 
-  // Live positions of STATIC enemies, mirrored from their driver via onAnimate.
-  const livePos = $state<Record<string, { x: number; z: number }>>(
-    Object.fromEntries(
-      game.enemies
-        .filter((e) => !DYNAMIC.has(e.type))
-        .map((e) => {
-          const w = axialToWorld(e.q, e.r, TILE_SIZE);
-          return [e.id, { x: w.x, z: w.z }];
-        })
-    )
-  );
-  function reportLive(id: string, x: number, z: number) {
-    const p = livePos[id];
-    if (p) {
-      p.x = x;
-      p.z = z;
-    }
+  // Live world position of an enemy (all enemies are movers now).
+  function enemyPos(e: { id: string }) {
+    return movers[e.id];
   }
-  // Live world position of any enemy (dynamic → mover, static → mirrored).
-  function enemyPos(e: { id: string; type: EnemyType; q: number; r: number }) {
-    if (DYNAMIC.has(e.type)) return movers[e.id];
-    return livePos[e.id] ?? axialToWorld(e.q, e.r, TILE_SIZE);
+
+  // A random point inside the playable arena (used by the bomber's roam AI).
+  function randomArenaPoint() {
+    const uL = ARENA_HALF_U - PLACE_MARGIN;
+    const vL = ARENA_HALF_V - PLACE_MARGIN;
+    const u = (Math.random() * 2 - 1) * uL;
+    const v = (Math.random() * 2 - 1) * vL;
+    return { x: (u + v) * Math.SQRT1_2, z: (v - u) * Math.SQRT1_2 };
   }
 
   // Placement clamp so a vehicle can't be sent into/through the frame.
@@ -464,6 +460,87 @@
   const RAM_COOLDOWN = 1.0; // seconds between hits from the same vessel
   const ramCooldowns: Record<string, number> = {};
 
+  // --- Bomber bombs ---
+  // The bomber lobs salvos of bombs in parabolic arcs to scattered points
+  // around the sub. Where each lands it explodes, damaging the sub at ANY
+  // depth — unlike guns/ram, diving does NOT save you; you must move clear.
+  const bomberId = game.enemies.find((e) => e.type === 'bomber')?.id;
+  const BOMB_INTERVAL_MIN = 4.5; // seconds between salvos
+  const BOMB_INTERVAL_MAX = 8.5;
+  const BOMB_SALVO_MIN = 3;
+  const BOMB_SALVO_MAX = 5;
+  const BOMB_SPREAD = 3.6; // scatter radius of targets around the sub
+  const BOMB_FLIGHT = 1.35; // seconds per arc
+  const BOMB_LAUNCH_Y = 0.7; // launch height (bomber deck)
+  const BOMB_ARC_H = 2.6; // parabola peak height above the straight line
+  const SEA_Y = 0.42; // impact / sea-surface height
+  const BLAST_RADIUS = 2.2; // world units; sub within this on impact → hit
+  const BLAST_DUR = 0.5; // explosion visual lifetime (s)
+  const BOMB_DAMAGE = 12;
+  let bombTimer = BOMB_INTERVAL_MIN;
+
+  type Bomb = {
+    active: boolean;
+    sx: number;
+    sy: number;
+    sz: number;
+    tx: number;
+    tz: number;
+    t: number;
+  };
+  type Blast = { active: boolean; x: number; z: number; t: number };
+  const bombs = $state<Bomb[]>(
+    Array.from({ length: 24 }, () => ({ active: false, sx: 0, sy: 0, sz: 0, tx: 0, tz: 0, t: 0 }))
+  );
+  const blasts = $state<Blast[]>(
+    Array.from({ length: 24 }, () => ({ active: false, x: 0, z: 0, t: 0 }))
+  );
+
+  function launchSalvo(sx: number, sz: number) {
+    const n = BOMB_SALVO_MIN + Math.floor(Math.random() * (BOMB_SALVO_MAX - BOMB_SALVO_MIN + 1));
+    for (let i = 0; i < n; i++) {
+      const b = bombs.find((x) => !x.active);
+      if (!b) break;
+      const ang = Math.random() * Math.PI * 2;
+      const rad = Math.random() * BOMB_SPREAD;
+      const p = clampToArena(game.x + Math.cos(ang) * rad, game.z + Math.sin(ang) * rad);
+      b.active = true;
+      b.sx = sx;
+      b.sy = BOMB_LAUNCH_Y;
+      b.sz = sz;
+      b.tx = p.x;
+      b.tz = p.z;
+      b.t = 0;
+    }
+  }
+
+  function spawnBlast(x: number, z: number) {
+    const bl = blasts.find((b) => !b.active);
+    if (bl) {
+      bl.active = true;
+      bl.x = x;
+      bl.z = z;
+      bl.t = 0;
+    }
+    if (game.gameOver) return;
+    // Bombs hit at ANY depth — no submerge escape.
+    const dx = x - game.x;
+    const dz = z - game.z;
+    if (dx * dx + dz * dz < BLAST_RADIUS * BLAST_RADIUS) {
+      damageSub(BOMB_DAMAGE, 'Una bomba del Bombardero te alcanzó.');
+    }
+  }
+
+  // On revive, clear in-flight bombs / explosions from the previous life so a
+  // stale bomb can't blast the freshly reset hull (same rationale as tracers).
+  $effect(() => {
+    if (!game.gameOver) {
+      for (const b of bombs) b.active = false;
+      for (const bl of blasts) bl.active = false;
+      bombTimer = BOMB_INTERVAL_MIN;
+    }
+  });
+
   // Distance in hex "cuadros" between two world points.
   function hexDistTiles(ax: number, az: number, bx: number, bz: number) {
     const a = worldToAxial(ax, az, TILE_SIZE);
@@ -522,7 +599,24 @@
         } else {
           m.moveTarget = null;
           m.moving = false;
+          // After arriving, a roamer sits idle for a fresh long stretch.
+          if (cfg.behavior === 'roam') {
+            m.roamTimer = ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN);
+          }
         }
+      } else if (e.active && cfg.behavior === 'roam') {
+        // Erratic wander: hold still, then occasionally creep to a random
+        // spot (and sometimes just stay put another stretch). Actual motion
+        // happens via moveTarget on subsequent frames.
+        m.roamTimer -= delta;
+        if (m.roamTimer <= 0) {
+          if (Math.random() < 0.65) {
+            m.moveTarget = randomArenaPoint();
+          } else {
+            m.roamTimer = ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN);
+          }
+        }
+        m.moving = false;
       } else if (e.active) {
         // Patrol along the config axis (u = horizontal, v = vertical),
         // bouncing at the arena edge. The step is the projection of the
@@ -612,7 +706,7 @@
     }
 
     // --- Ramming: an enemy hull over the sub deals ram damage, but ONLY when
-    // both are at the SAME depth level. Surface ships (cargo/warship/tanker)
+    // both are at the SAME depth level. Surface ships (cargo/warship/bomber)
     // are always surfaced, so they only hit a surfaced sub; the U-boat hits
     // whenever its live depth matches the sub's (both up or both down). ---
     for (const e of game.enemies) {
@@ -649,6 +743,33 @@
           damageSub(TRACER_DAMAGE, 'Las metralletas del destructor acabaron con tu casco.');
         }
       }
+    }
+
+    // --- Bomber: lob a salvo every so often while active ---
+    const bomber = bomberId ? game.enemies.find((e) => e.id === bomberId) : undefined;
+    const bmm = bomberId ? movers[bomberId] : undefined;
+    if (bomber?.active && bmm && !game.gameOver) {
+      bombTimer -= delta;
+      if (bombTimer <= 0) {
+        launchSalvo(bmm.x, bmm.z);
+        bombTimer = BOMB_INTERVAL_MIN + Math.random() * (BOMB_INTERVAL_MAX - BOMB_INTERVAL_MIN);
+      }
+    }
+
+    // --- Advance bombs (parabolic arc) → explode on landing ---
+    for (const b of bombs) {
+      if (!b.active) continue;
+      b.t += delta;
+      if (b.t >= BOMB_FLIGHT) {
+        b.active = false;
+        spawnBlast(b.tx, b.tz);
+      }
+    }
+    // --- Advance explosions ---
+    for (const bl of blasts) {
+      if (!bl.active) continue;
+      bl.t += delta;
+      if (bl.t >= BLAST_DUR) bl.active = false;
     }
 
     // --- Keep the context menu anchored to the selected enemy each frame so
@@ -743,14 +864,15 @@
       scale={SUB_SCALE}
       onclick={() => selectEnemy(e.id)}
     />
-  {:else if e.type === 'tanker'}
-    <Tanker
-      q={e.q}
-      r={e.r}
-      tileSize={TILE_SIZE}
+  {:else if e.type === 'bomber'}
+    {@const m = movers[e.id]}
+    <Bomber
+      x={m.x}
+      z={m.z}
+      heading={m.heading}
+      moving={m.moving}
       scale={SUB_SCALE}
       onclick={() => selectEnemy(e.id)}
-      onAnimate={(ax, az) => reportLive(e.id, ax, az)}
     />
   {:else if e.type === 'submarineIx'}
     {@const m = movers[e.id]}
@@ -763,6 +885,37 @@
       scale={SUB_SCALE}
       onclick={() => selectEnemy(e.id)}
     />
+  {/if}
+{/each}
+
+<!-- Bombs in flight: a dark sphere arcing along a parabola, plus a target
+     reticle on the sea marking where it'll land (so the player can dodge). -->
+{#each bombs as b}
+  {#if b.active}
+    {@const p = Math.min(b.t / BOMB_FLIGHT, 1)}
+    {@const bx = b.sx + (b.tx - b.sx) * p}
+    {@const bz = b.sz + (b.tz - b.sz) * p}
+    {@const by = b.sy + (SEA_Y - b.sy) * p + BOMB_ARC_H * 4 * p * (1 - p)}
+    <T.Mesh position={[bx, by, bz]} castShadow>
+      <T.SphereGeometry args={[0.12, 10, 8]} />
+      <T.MeshStandardMaterial color="#15150f" flatShading />
+    </T.Mesh>
+    <T.Mesh position={[b.tx, SEA_Y + 0.02, b.tz]} rotation={[-Math.PI / 2, 0, 0]}>
+      <T.RingGeometry args={[0.55, 0.68, 20]} />
+      <T.MeshBasicMaterial color="#e8603a" transparent opacity={0.5} depthWrite={false} toneMapped={false} />
+    </T.Mesh>
+  {/if}
+{/each}
+
+<!-- Explosions: an expanding, fading shockwave ring at the impact point. -->
+{#each blasts as bl}
+  {#if bl.active}
+    {@const p = Math.min(bl.t / BLAST_DUR, 1)}
+    {@const r = 0.3 + BLAST_RADIUS * p}
+    <T.Mesh position={[bl.x, SEA_Y + 0.04, bl.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[r, r, r]}>
+      <T.RingGeometry args={[0.55, 1.0, 24]} />
+      <T.MeshBasicMaterial color="#ffb24a" transparent opacity={(1 - p) * 0.9} depthWrite={false} toneMapped={false} />
+    </T.Mesh>
   {/if}
 {/each}
 

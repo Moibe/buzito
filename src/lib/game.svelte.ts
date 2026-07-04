@@ -1,4 +1,4 @@
-export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'tanker';
+export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber';
 
 // A machine-gun tracer round (pooled; physics driven by Scene, drawn by
 // Tracers.svelte). y is a fixed gun height; velocity is world XZ.
@@ -29,11 +29,11 @@ export type Enemy = {
 export const SUB_HP_MAX = 50;
 
 // Ramming damage per enemy class — hexa-turnos' ramDamage values (mass +
-// danger: a laden tanker is catastrophic, a destroyer is a glancing blow).
+// danger: a heavy bomber ship is catastrophic, a destroyer is a glancing blow).
 export const RAM_DAMAGE: Record<EnemyType, number> = {
   warship: 8,
   cargo: 18,
-  tanker: 25,
+  bomber: 20,
   submarineIx: 16,
 };
 
@@ -64,7 +64,7 @@ export const game = $state({
   enemies: [
     { id: 'warship-1', type: 'warship', name: 'Destructor', q: 6, r: -7, active: true },
     { id: 'cargo-1', type: 'cargo', name: 'Carguero', q: -5, r: 4, active: true },
-    { id: 'tanker-1', type: 'tanker', name: 'Petrolero', q: 0, r: 8, active: false },
+    { id: 'bomber-1', type: 'bomber', name: 'Bombardero', q: 2, r: 2, active: true },
     { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3, active: true },
   ] as Enemy[],
   // Context-menu selection. selectedEnemyId = null → no menu open.
