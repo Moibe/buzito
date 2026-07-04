@@ -94,7 +94,10 @@
     ← → girar · ↑ ↓ avanzar / reversa · Espacio: sumergir · clic en un enemigo: menú
     (seleccionado + clic en el mar: mover)
   </div>
-  <div class="progress">{game.visitedCount} / {game.totalTiles}</div>
+  <div class="progress">
+    {game.visitedCount} / {game.totalTiles}
+    <span class="progress-pct">{missionPct.toFixed(0)}%</span>
+  </div>
   <button class="level-btn" onclick={goToLevelSelect}>◄ {game.missionCity || 'Misiones'}</button>
   <!-- TEMP (debug): freeze / reactivate all enemies at once. -->
   <button class="debug-btn" onclick={toggleAllEnemies}>
@@ -119,13 +122,6 @@
   </div>
   <div class="stat-bar">
     <div class="stat-bar-fill hp" style="width: {hpPct}%"></div>
-  </div>
-  <div class="stat-row" style="margin-top: 10px;">
-    <span class="stat-label">Misión</span>
-    <span class="stat-value">{missionPct.toFixed(0)}%</span>
-  </div>
-  <div class="stat-bar">
-    <div class="stat-bar-fill mission" style="width: {missionPct}%"></div>
   </div>
 </div>
 
@@ -368,6 +364,14 @@
     font: 700 15px/1 system-ui, sans-serif;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     letter-spacing: 0.03em;
+  }
+  .progress-pct {
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 215, 0, 0.16);
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    font-size: 13px;
   }
 
   /* Level picker screen. */
@@ -832,11 +836,6 @@
   .stat-bar-fill.hp {
     background: linear-gradient(90deg, #c43838, #e85a5a);
   }
-  .stat-bar-fill.mission {
-    /* From the visited-tile bronze to gold as coverage completes. */
-    background: linear-gradient(90deg, #b8864e, #ffd700);
-  }
-
   /* Win banner — top-center celebratory card, no backdrop blur. */
   .win-banner {
     position: fixed;
