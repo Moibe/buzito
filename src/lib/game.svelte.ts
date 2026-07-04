@@ -37,11 +37,20 @@ export type Enemy = {
 // --- Tunable config (the in-game "knobs" panel binds to this; Scene reads it
 // LIVE each frame, so slider changes take effect immediately). HP changes
 // apply to enemies on the next "Regenerar enemigos" (respawnEnemies). ---
+// Fresh copy of the base per-mission enemy composition (deep, so edits don't
+// mutate the static MISSIONS table).
+function baseMissionEnemies(): { type: EnemyType; count: number }[][] {
+  return MISSIONS.map((m) => m.enemies.map((e) => ({ type: e.type, count: e.count })));
+}
+
 export const config = $state({
   sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
   // Game rules the admin edits in "Ajustes" (persisted to localStorage so the
   // change reaches the game). winPct = fraction of tiles to cover to win.
   rules: { winPct: 0.9 },
+  // Editable per-mission enemy composition (admin drag-to-add). Starts as the
+  // base table; persisted so edits reach the game.
+  missionEnemies: baseMissionEnemies(),
   pickup: { heal: 12, respawn: 180 },
   // Shiny asterisk power-ups: collecting one "liberates" (marks visited) every
   // tile along its horizontal, vertical and both diagonal lines on screen.
@@ -99,10 +108,36 @@ export const config = $state({
   },
 });
 
+// Validate a parsed mission-enemies override before trusting it (localStorage
+// could be stale/corrupt or from a different enemy set).
+function isValidMissionEnemies(v: unknown): v is { type: EnemyType; count: number }[][] {
+  if (!Array.isArray(v) || v.length !== MISSIONS.length) return false;
+  for (const list of v) {
+    if (!Array.isArray(list)) return false;
+    for (const e of list) {
+      if (typeof e !== 'object' || e === null) return false;
+      const ee = e as { type?: unknown; count?: unknown };
+      if (typeof ee.count !== 'number' || typeof ee.type !== 'string' || !(ee.type in ENEMY_INFO)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Load persisted admin rules (client only; server has no localStorage).
 if (typeof localStorage !== 'undefined') {
   const saved = Number(localStorage.getItem('buzito.winPct'));
   if (saved > 0 && saved <= 1) config.rules.winPct = saved;
+  const savedME = localStorage.getItem('buzito.missionEnemies');
+  if (savedME) {
+    try {
+      const parsed = JSON.parse(savedME);
+      if (isValidMissionEnemies(parsed)) config.missionEnemies = parsed;
+    } catch {
+      /* ignore corrupt value */
+    }
+  }
 }
 
 // Set the win-coverage rule from a PERCENTAGE (0-100), clamp, and persist it so
@@ -111,6 +146,42 @@ export function setWinPct(pct: number) {
   const v = Math.max(0.01, Math.min(1, (Number(pct) || 0) / 100));
   config.rules.winPct = v;
   if (typeof localStorage !== 'undefined') localStorage.setItem('buzito.winPct', String(v));
+}
+
+// --- Editable mission composition (admin drag-to-add) ---
+const MAX_PER_TYPE = 20;
+function persistMissionEnemies() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('buzito.missionEnemies', JSON.stringify(config.missionEnemies));
+  }
+}
+// Add one enemy of `type` to mission index (0-based). Validates the type.
+export function addEnemyToMission(missionIndex: number, type: string) {
+  const list = config.missionEnemies[missionIndex];
+  if (!list || !(type in ENEMY_INFO)) return;
+  const t = type as EnemyType;
+  const found = list.find((e) => e.type === t);
+  if (found) {
+    if (found.count < MAX_PER_TYPE) found.count++;
+  } else {
+    list.push({ type: t, count: 1 });
+  }
+  persistMissionEnemies();
+}
+// Remove one enemy of `type` from mission index (drops the entry at 0).
+export function removeEnemyFromMission(missionIndex: number, type: string) {
+  const list = config.missionEnemies[missionIndex];
+  if (!list) return;
+  const idx = list.findIndex((e) => e.type === (type as EnemyType));
+  if (idx < 0) return;
+  list[idx].count--;
+  if (list[idx].count <= 0) list.splice(idx, 1);
+  persistMissionEnemies();
+}
+// Restore every mission to the base difficulty table.
+export function resetMissions() {
+  config.missionEnemies = baseMissionEnemies();
+  persistMissionEnemies();
 }
 
 // Axial hex-ring helper (pure axial coords; no tile size needed). Ring k = the
@@ -155,9 +226,11 @@ function missionSpawnTiles(count: number): { q: number; r: number }[] {
 // listed type × its count, placed on spread spawn tiles, with hull scaled by
 // the mission's power multiplier ("características más filosas").
 function makeEnemiesForMission(n: number): Enemy[] {
-  const m = MISSIONS[Math.min(MISSIONS.length, Math.max(1, n)) - 1];
+  const idx = Math.min(MISSIONS.length, Math.max(1, n)) - 1;
+  const m = MISSIONS[idx];
+  const composition = config.missionEnemies[idx] ?? m.enemies;
   const types: EnemyType[] = [];
-  for (const e of m.enemies) for (let i = 0; i < e.count; i++) types.push(e.type);
+  for (const e of composition) for (let i = 0; i < e.count; i++) types.push(e.type);
   const tiles = missionSpawnTiles(types.length);
   const counters: Partial<Record<EnemyType, number>> = {};
   return types.map((type, i) => {

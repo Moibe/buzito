@@ -3,13 +3,34 @@
   import AdminSidebar from '$lib/AdminSidebar.svelte';
   import { MISSIONS, ENEMY_INFO } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
-  import { config, setWinPct } from '$lib/game.svelte';
+  import {
+    config,
+    setWinPct,
+    addEnemyToMission,
+    removeEnemyFromMission,
+    resetMissions,
+  } from '$lib/game.svelte';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   let collapsed = $state(false);
   let section = $state<'ajustes' | 'ciudades' | 'misiones'>('ajustes');
+  // Which mission card the dragged enemy is hovering (for the drop highlight).
+  let dragOverIndex = $state(-1);
+
+  // Live mission view: static label/power/note merged with the EDITABLE enemy
+  // composition (config.missionEnemies), with newTypes/total recomputed.
+  const missionsView = $derived.by(() => {
+    const seen = new Set<string>();
+    return MISSIONS.map((m, i) => {
+      const enemies = config.missionEnemies[i] ?? m.enemies;
+      const newTypes = enemies.map((e) => e.type).filter((t) => !seen.has(t));
+      newTypes.forEach((t) => seen.add(t));
+      const total = enemies.reduce((s, e) => s + e.count, 0);
+      return { n: m.n, label: m.label, power: m.power, note: m.note, enemies, newTypes, total };
+    });
+  });
 
   // View Transitions to animate the collapse when supported.
   function withTransition(fn: () => void) {
@@ -97,20 +118,28 @@
           <h2>Misiones <span class="count">{MISSIONS.length}</span></h2>
           <p>
             Dificultad creciente: la 1 es siempre la más fácil y la 8 la más difícil, sea cual
-            sea la ciudad. Sube con más enemigos, nuevos tipos (uno a la vez) y características
-            más filosas (multiplicador de poder).
+            sea la ciudad. <b>Arrastra un tipo de enemigo a una misión</b> para añadir uno; haz
+            clic en un enemigo de la misión para quitarlo.
           </p>
         </header>
 
-        <!-- Enemy-type palette. Future: drag one onto a mission to add a copy. -->
+        <!-- Enemy-type palette: drag one onto a mission card to add a copy. -->
         <div class="palette">
           <div class="palette-head">
             <strong>Tipos de enemigos</strong>
-            <span>Arrástralos a una misión para añadir uno (próximamente)</span>
+            <span>Arrástralos a una misión para añadir uno</span>
+            <button class="reset-btn" onclick={resetMissions}>↺ Restablecer</button>
           </div>
           <div class="palette-items">
             {#each Object.entries(ENEMY_INFO) as [type, info]}
-              <div class="palette-item" draggable="true" data-type={type} title={info.name}>
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="palette-item"
+                draggable="true"
+                data-type={type}
+                title={info.name}
+                ondragstart={(e) => e.dataTransfer?.setData('text/plain', type)}
+              >
                 <span class="pi-emoji">{info.emoji}</span>
                 <span>{info.name}</span>
               </div>
@@ -119,8 +148,25 @@
         </div>
 
         <div class="missions">
-          {#each MISSIONS as m}
-            <article class="mission">
+          {#each missionsView as m, i}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <article
+              class="mission"
+              class:dragover={dragOverIndex === i}
+              ondragover={(e) => {
+                e.preventDefault();
+                dragOverIndex = i;
+              }}
+              ondragleave={() => {
+                if (dragOverIndex === i) dragOverIndex = -1;
+              }}
+              ondrop={(e) => {
+                e.preventDefault();
+                const t = e.dataTransfer?.getData('text/plain');
+                if (t) addEnemyToMission(i, t);
+                dragOverIndex = -1;
+              }}
+            >
               <div class="mission-top">
                 <span class="mnum">{m.n}</span>
                 <div class="mtitle">
@@ -134,13 +180,21 @@
               <div class="diffbar"><span style="width: {(m.n / MISSIONS.length) * 100}%"></span></div>
               <div class="enemies">
                 {#each m.enemies as e}
-                  <span class="chip" class:isnew={m.newTypes.includes(e.type)}>
+                  <button
+                    class="chip"
+                    class:isnew={m.newTypes.includes(e.type)}
+                    title="Clic para quitar uno"
+                    onclick={() => removeEnemyFromMission(i, e.type)}
+                  >
                     <span class="chip-emoji">{ENEMY_INFO[e.type].emoji}</span>
                     {ENEMY_INFO[e.type].name}
                     <b>×{e.count}</b>
                     {#if m.newTypes.includes(e.type)}<em>nuevo</em>{/if}
-                  </span>
+                  </button>
                 {/each}
+                {#if m.enemies.length === 0}
+                  <span class="empty-hint">Sin enemigos — arrastra uno aquí</span>
+                {/if}
                 <span class="total">{m.total} en total</span>
               </div>
               <p class="mnote">{m.note}</p>
@@ -520,8 +574,14 @@
     border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 999px;
     padding: 4px 10px;
-    font-size: 12.5px;
+    font: 500 12.5px/1 system-ui, sans-serif;
     color: rgba(255, 255, 255, 0.92);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .chip:hover {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.55);
   }
   .chip b {
     color: #fff;
@@ -547,10 +607,37 @@
     color: rgba(255, 255, 255, 0.6);
     font-variant-numeric: tabular-nums;
   }
+  .empty-hint {
+    font-size: 12px;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.45);
+  }
   .mnote {
     margin: 10px 0 0;
     font-size: 12.5px;
     line-height: 1.45;
     color: rgba(255, 255, 255, 0.72);
+  }
+  /* Drop highlight while dragging an enemy type over a mission card. */
+  .mission.dragover {
+    border-color: rgba(147, 197, 253, 0.9);
+    background: rgba(37, 99, 235, 0.18);
+    box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.4) inset;
+  }
+  .reset-btn {
+    margin-left: auto;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.85);
+    font: 600 12px/1 system-ui, sans-serif;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .reset-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #fff;
   }
 </style>
