@@ -169,7 +169,6 @@
   });
 
   // --- Movement tuning ---
-  const REVERSE_FACTOR = 0.4; // reverse is slower than ahead
   // Player turn rate / speed live in config.sub (tunable from the panel).
 
   // --- Keyboard state ---
@@ -254,9 +253,9 @@
     if (alive && keys.right) game.heading -= config.sub.turnRate * delta;
 
     let speed = 0;
-    // Same speed surfaced or submerged (no dive penalty).
+    // Same speed surfaced or submerged, forward or reverse (no penalties).
     if (alive && keys.up) speed += subSpeed;
-    if (alive && keys.down) speed -= subSpeed * REVERSE_FACTOR;
+    if (alive && keys.down) speed -= subSpeed;
 
     const fwdX = -Math.sin(game.heading);
     const fwdZ = -Math.cos(game.heading);
