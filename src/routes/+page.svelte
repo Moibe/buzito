@@ -21,6 +21,8 @@
   const nextLevel = $derived(Math.min(MISSIONS.length, game.completed.length + 1));
   const nextMission = $derived(MISSIONS[nextLevel - 1]);
   const campaignDone = $derived(game.completed.length >= MISSIONS.length);
+  // Two-step confirm for the "Salir" (reset campaign) button.
+  let confirmingExit = $state(false);
 
   const hpPct = $derived(
     config.sub.hp > 0 ? Math.min(100, (game.hp / config.sub.hp) * 100) : 0
@@ -69,7 +71,10 @@
           class="ls-tile"
           class:done
           disabled={done}
-          onclick={() => startMission(city)}
+          onclick={() => {
+            confirmingExit = false;
+            startMission(city);
+          }}
         >
           {#if done}
             <span class="ls-tile-check">✓</span>
@@ -81,6 +86,24 @@
     </div>
     {#if !game.campaignStarted || campaignDone}
       <button class="ls-reroll" onclick={reshuffleMissions}>🎲 Otras ciudades (reinicia)</button>
+    {:else if !confirmingExit}
+      <button class="ls-exit" onclick={() => (confirmingExit = true)}>Salir</button>
+    {:else}
+      <div class="ls-confirm">
+        <span>¿Salir y empezar todo de nuevo? Se perderá tu progreso.</span>
+        <div class="ls-confirm-actions">
+          <button
+            class="ls-confirm-yes"
+            onclick={() => {
+              reshuffleMissions();
+              confirmingExit = false;
+            }}
+          >
+            Sí, salir
+          </button>
+          <button class="ls-confirm-no" onclick={() => (confirmingExit = false)}>Cancelar</button>
+        </div>
+      </div>
     {/if}
   </div>
 {:else}
@@ -474,6 +497,72 @@
   .ls-reroll:hover {
     background: rgba(20, 45, 68, 0.9);
     border-color: rgba(255, 215, 0, 1);
+  }
+
+  /* "Salir" (reset the whole campaign) — danger flavour, shown mid-campaign. */
+  .ls-exit {
+    margin-top: 26px;
+    background: rgba(60, 16, 16, 0.6);
+    color: #ff9a9a;
+    border: 1px solid rgba(239, 68, 68, 0.6);
+    border-radius: 8px;
+    padding: 10px 22px;
+    font: 700 14px/1 system-ui, sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .ls-exit:hover {
+    background: rgba(90, 22, 22, 0.85);
+    border-color: rgba(239, 68, 68, 1);
+    color: #ffc9c9;
+  }
+  .ls-confirm {
+    margin-top: 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    background: rgba(10, 20, 30, 0.8);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    border-radius: 10px;
+    padding: 16px 22px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+  }
+  .ls-confirm > span {
+    color: rgba(255, 255, 255, 0.9);
+    font: 500 14px/1.3 system-ui, sans-serif;
+  }
+  .ls-confirm-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .ls-confirm-yes,
+  .ls-confirm-no {
+    border-radius: 8px;
+    padding: 9px 18px;
+    font: 700 13px/1 system-ui, sans-serif;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .ls-confirm-yes {
+    background: #ef4444;
+    color: #fff;
+  }
+  .ls-confirm-yes:hover {
+    background: #f05a5a;
+  }
+  .ls-confirm-no {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.85);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+  .ls-confirm-no:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
   }
 
   /* "Back to levels" button in the arena HUD. */
