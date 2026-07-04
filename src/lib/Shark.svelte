@@ -168,7 +168,7 @@
     <!-- Surfaced: sleek flattened body + dorsal fin + tail fin. -->
     <T.Mesh scale={[0.3, 0.18, 1.0]} castShadow receiveShadow renderOrder={2} onclick={handleClick}>
       <T.SphereGeometry args={[1, 16, 12]} />
-      <T.MeshStandardMaterial color="#78828c" flatShading />
+      <T.MeshStandardMaterial color="#4a5560" flatShading />
     </T.Mesh>
     <!-- Dorsal fin: a swept triangular fin on the back. -->
     <T.Mesh position={[0, 0.16, -0.05]} rotation={[0, 0, -0.35]} scale={[0.18, 1, 1]} castShadow renderOrder={2} onclick={handleClick}>
