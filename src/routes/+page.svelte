@@ -15,6 +15,10 @@
   } from '$lib/game.svelte';
 
   const hpPct = $derived((game.hp / config.sub.hp) * 100);
+  // Mission coverage percentage (clamped to 100 for display).
+  const missionPct = $derived(
+    game.totalTiles > 0 ? Math.min(100, (game.visitedCount / game.totalTiles) * 100) : 0
+  );
   // TEMP (debug): whether any enemy is currently active.
   const enemiesActive = $derived(game.enemies.some((e) => e.active));
   // TEMP (debug): tuning panel open/closed.
@@ -84,6 +88,13 @@
   <div class="stat-bar">
     <div class="stat-bar-fill hp" style="width: {hpPct}%"></div>
   </div>
+  <div class="stat-row" style="margin-top: 10px;">
+    <span class="stat-label">Misión</span>
+    <span class="stat-value">{missionPct.toFixed(0)}%</span>
+  </div>
+  <div class="stat-bar">
+    <div class="stat-bar-fill mission" style="width: {missionPct}%"></div>
+  </div>
 </div>
 
 <!-- Red vignette flash on hit (opacity driven per-frame from game.hitFlash). -->
@@ -94,6 +105,15 @@
 <!-- Green vignette flash on healing (blue-orb pickup). -->
 {#if game.healFlash > 0}
   <div class="heal-vignette" style="opacity: {game.healFlash * 0.5}"></div>
+{/if}
+
+<!-- Win banner — top-center, celebratory, does NOT blur/cover the scene (unlike
+     the game-over overlay). Non-interactive; play continues underneath. -->
+{#if game.won}
+  <div class="win-banner">
+    <span class="win-title">🎉 ¡Felicitaciones!</span>
+    <span class="win-sub">Misión {game.missionCity} completada</span>
+  </div>
 {/if}
 
 <!-- Game over overlay. -->
@@ -742,6 +762,51 @@
   }
   .stat-bar-fill.hp {
     background: linear-gradient(90deg, #c43838, #e85a5a);
+  }
+  .stat-bar-fill.mission {
+    /* From the visited-tile bronze to gold as coverage completes. */
+    background: linear-gradient(90deg, #b8864e, #ffd700);
+  }
+
+  /* Win banner — top-center celebratory card, no backdrop blur. */
+  .win-banner {
+    position: fixed;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 14px 34px;
+    background: rgba(10, 20, 30, 0.9);
+    border: 2px solid rgba(255, 215, 0, 0.85);
+    border-radius: 12px;
+    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 0 30px rgba(255, 215, 0, 0.35);
+    pointer-events: none;
+    text-align: center;
+    animation: winpop 0.45s ease-out;
+  }
+  .win-title {
+    color: #ffd700;
+    font: 800 26px/1 system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+  .win-sub {
+    color: rgba(255, 243, 184, 0.9);
+    font: 600 14px/1.2 system-ui, sans-serif;
+  }
+  @keyframes winpop {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -16px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
   }
 
   /* Red vignette flash when the sub takes a hit. */

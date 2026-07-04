@@ -146,6 +146,9 @@ export const game = $state({
   gameOver: false,
   // What sank the sub — shown on the game-over card.
   deathCause: '',
+  // True once mission coverage reaches the win threshold — shows the
+  // "Felicitaciones" banner. The sub becomes invincible once won.
+  won: false,
   // Transient red vignette on hit (set to 1 on damage, decayed per-frame by
   // Scene, rendered as an overlay by the HUD).
   hitFlash: 0,
@@ -223,7 +226,7 @@ export function toggleAllEnemies() {
 // and flips game over; further damage is ignored once sunk. `cause` is the
 // message shown on the game-over card if this hit is the killing blow.
 export function damageSub(amount: number, cause = 'Tu casco no aguantó.') {
-  if (game.gameOver) return;
+  if (game.gameOver || game.won) return; // won → mission complete, invincible
   game.hp = Math.max(0, game.hp - amount);
   game.hitFlash = 1;
   if (game.hp <= 0) {
@@ -273,6 +276,7 @@ export function resetGame() {
   game.hp = config.sub.hp;
   game.gameOver = false;
   game.deathCause = '';
+  game.won = false;
   game.hitFlash = 0;
   game.healFlash = 0;
   game.x = 0;
