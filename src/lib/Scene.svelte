@@ -2,7 +2,7 @@
   import { T, useTask } from '@threlte/core';
   import { interactivity } from '@threlte/extras';
   import { untrack } from 'svelte';
-  import { Vector3 } from 'three';
+  import { BackSide, Vector3 } from 'three';
   import type {
     DirectionalLight as ThreeDirLight,
     OrthographicCamera as ThreeOrthoCam,
@@ -1140,21 +1140,27 @@
     {@const inv = 1 / (Math.hypot(t.vx, t.vz) || 1)}
     {@const bx = -t.vx * inv}
     {@const bz = -t.vz * inv}
+    <!-- Outline shell (same contour treatment + colors as the submerged shark). -->
     <T.Mesh position={[t.x, TORPEDO_Y, t.z]} rotation={[0, ang, 0]} renderOrder={3}>
+      <T.BoxGeometry args={[0.2, 0.17, 0.95]} />
+      <T.MeshBasicMaterial color="#cfe0ea" side={BackSide} transparent opacity={0.9} depthWrite={false} />
+    </T.Mesh>
+    <!-- Body in the submerged shark's grey. -->
+    <T.Mesh position={[t.x, TORPEDO_Y, t.z]} rotation={[0, ang, 0]} renderOrder={4}>
       <T.BoxGeometry args={[0.15, 0.12, 0.85]} />
-      <T.MeshStandardMaterial color="#0a2030" flatShading depthWrite={false} />
+      <T.MeshBasicMaterial color="#5a6570" transparent opacity={0.55} depthWrite={false} />
     </T.Mesh>
     {#each Array.from({ length: 8 }) as _, i}
       {@const d = 0.55 + i * 0.34}
       {@const s = Math.max(0.025, 0.095 * (1 - i * 0.1))}
-      <T.Mesh position={[t.x + bx * d, TORPEDO_Y + 0.02, t.z + bz * d]} renderOrder={3}>
+      <T.Mesh position={[t.x + bx * d, TORPEDO_Y + 0.02, t.z + bz * d]} renderOrder={4}>
+        <T.SphereGeometry args={[s, 8, 6]} />
         <T.MeshBasicMaterial
-          color="#0a2030"
+          color="#dcecf5"
           transparent
           opacity={0.55 * (1 - i * 0.1)}
           depthWrite={false}
         />
-        <T.SphereGeometry args={[s, 8, 6]} />
       </T.Mesh>
     {/each}
   {/if}
