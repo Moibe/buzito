@@ -473,6 +473,14 @@
   const RAM_COOLDOWN = 1.0; // seconds between hits from the same vessel
   const ramCooldowns: Record<string, number> = {};
 
+  // --- Breach attack ---
+  // Emerging (surfacing) right under a SURFACED enemy hits it from below: it
+  // takes damage and gets flung to an adjacent tile, and YOU take none.
+  const BREACH_RADIUS = 1.8; // overlap needed at the moment of surfacing
+  const BREACH_DAMAGE = 25; // a solid surprise hit
+  const BREACH_KNOCK = Math.sqrt(3) * TILE_SIZE; // one adjacent-tile distance
+  let prevSubmerged = false; // sub depth last frame, to detect the emerge
+
   // --- Bomber bombs ---
   // The bomber lobs salvos of bombs in parabolic arcs to scattered points
   // around the sub. Where each lands it explodes, damaging the sub at ANY
@@ -766,6 +774,31 @@
     if (game.healFlash > 0) {
       game.healFlash = Math.max(0, game.healFlash - delta * 3);
     }
+
+    // --- Breach attack: surfacing this frame right under a SURFACED enemy
+    // rams it from below — it takes damage + gets flung to an adjacent tile,
+    // and the sub takes NONE (this replaces the ram that would otherwise fire
+    // now that both are at the surface). ---
+    if (prevSubmerged && !game.submerged && !game.gameOver) {
+      for (const e of game.enemies) {
+        const m = movers[e.id];
+        if (!m || m.submerged) continue; // only enemies on the surface
+        const dx = m.x - game.x;
+        const dz = m.z - game.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < BREACH_RADIUS * BREACH_RADIUS) {
+          e.hp -= BREACH_DAMAGE;
+          const d = Math.sqrt(d2) || 1;
+          const knock = clampToArena(m.x + (dx / d) * BREACH_KNOCK, m.z + (dz / d) * BREACH_KNOCK);
+          m.x = knock.x;
+          m.z = knock.z;
+          m.moveTarget = null; // cancel any glide so the shove sticks
+          ramCooldowns[e.id] = RAM_COOLDOWN; // and don't ram the sub this frame
+          spawnBlastVisual(m.x, m.z);
+        }
+      }
+    }
+    prevSubmerged = game.submerged;
 
     // --- Ramming: an enemy hull over the sub deals ram damage, but ONLY when
     // both are at the SAME depth level. Surface ships (cargo/warship/bomber)
