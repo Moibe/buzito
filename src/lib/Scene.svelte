@@ -20,6 +20,7 @@
   import Mine from './Mine.svelte';
   import Star from './Star.svelte';
   import XStar from './XStar.svelte';
+  import LineStar from './LineStar.svelte';
   import Tracers from './Tracers.svelte';
   import { axialToWorld, worldToAxial, axialRound, buildBoardIsoRect } from './hex';
   import {
@@ -442,6 +443,8 @@
       starRespawnTimer = 0;
       for (const s of xstars) s.active = false;
       xstarRespawnTimer = 0;
+      for (const s of linestars) s.active = false;
+      linestarRespawnTimer = 0;
     });
   });
 
@@ -790,6 +793,30 @@
     }
   }
 
+  // Line power-ups: same pattern, liberate a single line at a random angle.
+  type LineStar = { active: boolean; x: number; z: number; angle: number };
+  const linestars = $state<LineStar[]>(
+    Array.from({ length: 8 }, () => ({ active: false, x: 0, z: 0, angle: 0 }))
+  );
+  let linestarRespawnTimer = 0;
+  function spawnLineStars() {
+    const count = Math.max(0, Math.min(linestars.length, Math.round(config.linestars.count)));
+    for (let i = 0; i < linestars.length; i++) {
+      if (i < count) {
+        const p = randomArenaPoint();
+        const raw = worldToAxial(p.x, p.z, TILE_SIZE);
+        const a = axialRound(raw.q, raw.r);
+        const w = axialToWorld(a.q, a.r, TILE_SIZE);
+        linestars[i].active = true;
+        linestars[i].x = w.x;
+        linestars[i].z = w.z;
+        linestars[i].angle = Math.random() * Math.PI * 2; // any orientation
+      } else {
+        linestars[i].active = false;
+      }
+    }
+  }
+
   // Mark VISITED every real tile along the star's 4 screen lines (the asterisk):
   // horizontal (const v), vertical (const u) and both diagonals (world x / z).
   // Walk each of the 8 rays step by step from the star, snapping to the nearest
@@ -847,6 +874,15 @@
       [-s, -c],
     ]);
   }
+  // Line: a single line through the point, rotated to an arbitrary angle theta.
+  function liberateLine(sx: number, sz: number, theta: number) {
+    const c = Math.cos(theta);
+    const s = Math.sin(theta);
+    liberateRays(sx, sz, [
+      [c, -s],
+      [-c, s],
+    ]);
+  }
 
   // On revive, clear in-flight bombs / explosions from the previous life so a
   // stale bomb can't blast the freshly reset hull (same rationale as tracers).
@@ -865,6 +901,8 @@
       starRespawnTimer = 0;
       for (const s of xstars) s.active = false;
       xstarRespawnTimer = 0;
+      for (const s of linestars) s.active = false;
+      linestarRespawnTimer = 0;
     }
   });
 
@@ -1382,6 +1420,27 @@
       if (xstarRespawnTimer <= 0) spawnXStars();
     }
 
+    // --- Line power-ups: collect on proximity (any depth) → liberate a single
+    // line at its angle; respawn a while after cleared. ---
+    if (linestars.some((s) => s.active)) {
+      if (!game.gameOver) {
+        for (const s of linestars) {
+          if (!s.active) continue;
+          const dx = s.x - game.x;
+          const dz = s.z - game.z;
+          if (dx * dx + dz * dz < STAR_RADIUS2) {
+            s.active = false;
+            liberateLine(s.x, s.z, s.angle);
+            spawnBlastVisual(s.x, s.z);
+          }
+        }
+        if (!linestars.some((s) => s.active)) linestarRespawnTimer = config.linestars.respawn;
+      }
+    } else if (!game.gameOver) {
+      linestarRespawnTimer -= delta;
+      if (linestarRespawnTimer <= 0) spawnLineStars();
+    }
+
     // --- Project every enemy to screen space so its HTML health bar can
     // follow it (camera is static, enemies move → reproject each frame). ---
     if (cam) {
@@ -1685,6 +1744,14 @@
 {#each xstars as s}
   {#if s.active}
     <XStar x={s.x} z={s.z} angle={s.angle} scale={SUB_SCALE} />
+  {/if}
+{/each}
+
+<!-- Line power-ups: green bars at a fixed random angle. Collect one to liberate
+     that single line. -->
+{#each linestars as s}
+  {#if s.active}
+    <LineStar x={s.x} z={s.z} angle={s.angle} scale={SUB_SCALE} />
   {/if}
 {/each}
 

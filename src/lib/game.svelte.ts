@@ -44,6 +44,8 @@ export const config = $state({
   // X power-ups: like stars but liberate only the two diagonal lines of an X,
   // at each one's own random angle.
   xstars: { count: 3, respawn: 25 },
+  // Line power-ups: liberate a SINGLE line, at each one's own random angle.
+  linestars: { count: 3, respawn: 25 },
   // --- Player sub upgrades/abilities (the LEFT tuning panel binds to this).
   // Each has an `enabled` toggle so they can be switched on/off to test. ---
   player: {
