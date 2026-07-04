@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core';
   import { interactivity } from '@threlte/extras';
+  import { untrack } from 'svelte';
   import { Vector3 } from 'three';
   import type {
     DirectionalLight as ThreeDirLight,
@@ -590,22 +591,27 @@
         }
       }
     }
+  });
 
-    // --- Anchor the open context menu to the selected enemy's live screen
-    // position (follows a vehicle while it glides). ---
-    const c = cam;
+  // Anchor the context menu to the enemy's screen position AT SELECTION TIME
+  // and FREEZE it there — a context menu shouldn't chase a patrolling vessel
+  // (a moving target makes its buttons impossible to click). The camera is
+  // static, so one projection per selection suffices. The position read is
+  // untracked so the enemy's per-frame movement doesn't re-run this effect.
+  $effect(() => {
     const id = game.selectedEnemyId;
-    if (c && id) {
+    const c = cam;
+    if (!c || !id) return;
+    untrack(() => {
       const e = game.enemies.find((x) => x.id === id);
-      if (e) {
-        const w = enemyPos(e);
-        c.updateMatrixWorld(true);
-        c.matrixWorldInverse.copy(c.matrixWorld).invert();
-        projScratch.set(w.x, 0, w.z).project(c);
-        game.menuSx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
-        game.menuSy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
-      }
-    }
+      if (!e) return;
+      const w = enemyPos(e);
+      c.updateMatrixWorld(true);
+      c.matrixWorldInverse.copy(c.matrixWorld).invert();
+      projScratch.set(w.x, 0, w.z).project(c);
+      game.menuSx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
+      game.menuSy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
+    });
   });
 </script>
 
