@@ -18,6 +18,8 @@
   const enemiesActive = $derived(game.enemies.some((e) => e.active));
   // TEMP (debug): tuning panel open/closed.
   let showConfig = $state(false);
+  // Player abilities/upgrades panel (left side) open/closed.
+  let showAbilities = $state(false);
 
   // The enemy whose context menu is open (null = no menu).
   const selectedEnemy = $derived(
@@ -61,6 +63,8 @@
   <button class="debug-btn" onclick={toggleAllEnemies}>
     {enemiesActive ? '⏸ Detener enemigos' : '▶ Reactivar enemigos'}
   </button>
+  <!-- Open the player abilities/upgrades panel (left side). -->
+  <button class="debug-btn abil-btn" onclick={() => (showAbilities = !showAbilities)}>🔱 Submarino</button>
   <!-- TEMP (debug): open the tuning panel. -->
   <button class="debug-btn" onclick={() => (showConfig = !showConfig)}>⚙ Config</button>
 </div>
@@ -94,6 +98,35 @@
       <h1>¡Hundido!</h1>
       <p>{game.deathCause || 'Tu casco no aguantó.'}</p>
       <button onclick={resetGame}>Reintentar</button>
+    </div>
+  </div>
+{/if}
+
+<!-- Player abilities/upgrades — a LEFT-side panel (teal), mirroring the enemy
+     config on the right. Toggle each ability on/off and tune its knobs to test.
+     Bound to config.player; Scene reads it live each frame. -->
+{#if showAbilities}
+  <div class="abil-panel">
+    <div class="abil-head">
+      <span>🔱 Submarino</span>
+      <button class="abil-x" onclick={() => (showAbilities = false)}>✕</button>
+    </div>
+    <div class="abil-body">
+      <div class="abil-sec">Misiles · tecla M</div>
+      <label class="abil-toggle">
+        <span>Activar</span>
+        <input type="checkbox" bind:checked={config.player.missiles.enabled} />
+      </label>
+      <label class="knob"><span>Daño</span><input type="number" step="1" min="0" bind:value={config.player.missiles.damage} /></label>
+      <label class="knob"><span>Velocidad</span><input type="number" step="0.5" min="1" bind:value={config.player.missiles.speed} /></label>
+      <label class="knob"><span>Cadencia (s)</span><input type="number" step="0.1" min="0.1" bind:value={config.player.missiles.interval} /></label>
+
+      <div class="abil-sec">Mayor velocidad</div>
+      <label class="abil-toggle">
+        <span>Activar</span>
+        <input type="checkbox" bind:checked={config.player.speedBoost.enabled} />
+      </label>
+      <label class="knob"><span>Multiplicador</span><input type="number" step="0.1" min="1" bind:value={config.player.speedBoost.mult} /></label>
     </div>
   </div>
 {/if}
@@ -422,6 +455,94 @@
   }
   .cfg-regen:hover {
     background: rgba(200, 130, 240, 0.32);
+  }
+
+  /* Player abilities panel — LEFT side, teal theme (distinct from the violet
+     enemy config on the right). Sits below the stats card. Reuses .knob. */
+  .abil-panel {
+    position: fixed;
+    top: 116px;
+    left: 14px;
+    z-index: 30;
+    width: 218px;
+    max-height: 78vh;
+    display: flex;
+    flex-direction: column;
+    background: rgba(8, 32, 38, 0.92);
+    border: 1px solid rgba(90, 214, 200, 0.6);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #a9ede4;
+    font: 500 12px/1.2 system-ui, sans-serif;
+  }
+  .abil-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(90, 214, 200, 0.25);
+    font-weight: 700;
+    color: #d6fbf6;
+  }
+  .abil-x {
+    background: transparent;
+    border: none;
+    color: #a9ede4;
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .abil-body {
+    padding: 8px 12px 12px;
+    overflow-y: auto;
+  }
+  .abil-sec {
+    margin: 12px 0 4px;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #62d3c6;
+    border-bottom: 1px dashed rgba(90, 214, 200, 0.3);
+    padding-bottom: 3px;
+  }
+  .abil-sec:first-child {
+    margin-top: 0;
+  }
+  /* Enable/disable toggle row. */
+  .abil-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    font-weight: 600;
+    color: #d6fbf6;
+  }
+  .abil-toggle input {
+    width: 18px;
+    height: 18px;
+    accent-color: #37c4b4;
+    cursor: pointer;
+  }
+  /* Teal-tint the reused .knob inputs while inside the abilities panel. */
+  .abil-panel .knob span {
+    color: rgba(169, 237, 228, 0.85);
+  }
+  .abil-panel .knob input {
+    border-color: rgba(90, 214, 200, 0.5);
+    background: rgba(4, 16, 18, 0.7);
+  }
+  /* Teal variant of the HUD button that opens this panel. */
+  .abil-btn {
+    background: rgba(14, 60, 64, 0.72);
+    color: #a9ede4;
+    border-color: rgba(90, 214, 200, 0.7);
+  }
+  .abil-btn:hover {
+    background: rgba(20, 82, 86, 0.9);
+    border-color: rgba(150, 240, 230, 1);
   }
 
   /* Enemy health bar — small overlay tracking each enemy's screen position. */

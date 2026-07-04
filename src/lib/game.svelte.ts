@@ -36,6 +36,15 @@ export type Enemy = {
 export const config = $state({
   sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
   pickup: { heal: 12, respawn: 180 },
+  // --- Player sub upgrades/abilities (the LEFT tuning panel binds to this).
+  // Each has an `enabled` toggle so they can be switched on/off to test. ---
+  player: {
+    // Missiles fired with the M key: straight-line projectiles that damage the
+    // first enemy they hit (any depth). interval = seconds between shots.
+    missiles: { enabled: false, damage: 25, speed: 12, interval: 0.5 },
+    // Speed boost — multiplies the base sub speed while enabled.
+    speedBoost: { enabled: false, mult: 1.7 },
+  },
   // Fraction of the arena's tiles you must submerge over to clear a stage
   // (1 = all of them; lower it if covering the whole board feels too long).
   stage: { coverage: 1.0 },

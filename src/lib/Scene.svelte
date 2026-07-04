@@ -177,7 +177,7 @@
   // --- Keyboard state ---
   // Plain object mutated by the listeners and read in useTask — no
   // reactivity needed, the physics polls it every frame.
-  const keys = { up: false, down: false, left: false, right: false };
+  const keys = { up: false, down: false, left: false, right: false, m: false };
 
   $effect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -205,6 +205,10 @@
           }
           e.preventDefault();
           break;
+        case 'm':
+        case 'M':
+          keys.m = true;
+          break;
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -221,13 +225,17 @@
         case 'ArrowRight':
           keys.right = false;
           break;
+        case 'm':
+        case 'M':
+          keys.m = false;
+          break;
       }
     };
     // If the window loses focus mid-press (alt-tab, click outside), the
     // matching keyup never arrives and the sub would sail on its own.
     // Reset everything on blur / tab-hide.
     const resetKeys = () => {
-      keys.up = keys.down = keys.left = keys.right = false;
+      keys.up = keys.down = keys.left = keys.right = keys.m = false;
     };
     const onVisibility = () => {
       if (document.hidden) resetKeys();
@@ -251,7 +259,9 @@
   useTask((delta) => {
     // A sunk sub doesn't answer the helm — controls freeze until restart.
     const alive = !game.gameOver;
-    const subSpeed = config.sub.speed;
+    // "Mayor velocidad" ability: multiply the base speed while enabled.
+    const subSpeed =
+      config.sub.speed * (config.player.speedBoost.enabled ? config.player.speedBoost.mult : 1);
     if (alive && keys.left) game.heading += config.sub.turnRate * delta;
     if (alive && keys.right) game.heading -= config.sub.turnRate * delta;
 
@@ -508,7 +518,9 @@
     if (!game.gameOver) {
       for (const t of tracers) t.active = false;
       for (const t of torpedoes) t.active = false;
+      for (const mi of missiles) mi.active = false;
       fireCooldown = 0;
+      missileCooldown = 0;
       muzzleFlash = 0;
     }
   });
@@ -661,6 +673,30 @@
     return true;
   }
 
+  // --- Player missiles (M key ability) ---
+  // Straight-line projectiles fired from the sub's bow; they damage the first
+  // enemy they cross (at any depth) and expire at the arena frame.
+  const MISSILE_HIT_R2 = 0.9 * 0.9;
+  const MISSILE_Y = 0.6; // render height (rides above the surface)
+  const MISSILE_LAUNCH_OFFSET = 0.9; // spawn a bit ahead of the bow
+  type Missile = { active: boolean; x: number; z: number; vx: number; vz: number };
+  const missiles = $state<Missile[]>(
+    Array.from({ length: 12 }, () => ({ active: false, x: 0, z: 0, vx: 0, vz: 0 }))
+  );
+  let missileCooldown = 0;
+  function launchMissile() {
+    const mi = missiles.find((p) => !p.active);
+    if (!mi) return;
+    const spd = config.player.missiles.speed;
+    const fx = -Math.sin(game.heading);
+    const fz = -Math.cos(game.heading);
+    mi.active = true;
+    mi.x = game.x + fx * MISSILE_LAUNCH_OFFSET;
+    mi.z = game.z + fz * MISSILE_LAUNCH_OFFSET;
+    mi.vx = fx * spd;
+    mi.vz = fz * spd;
+  }
+
   // --- Health pickups ---
   // Three blue orbs (each randomly submerged or surfaced) appear on the board;
   // touching one AT THE SAME DEPTH heals the sub. Once all three are taken, a
@@ -739,6 +775,14 @@
 
   const projScratch = new Vector3();
   useTask((delta) => {
+    // --- Player missiles: fire with M while the ability is on (auto-repeats at
+    // the configured interval while held). ---
+    if (missileCooldown > 0) missileCooldown -= delta;
+    if (config.player.missiles.enabled && keys.m && !game.gameOver && missileCooldown <= 0) {
+      launchMissile();
+      missileCooldown = Math.max(0.1, config.player.missiles.interval);
+    }
+
     // --- Dynamic enemy motion (all enemies: cargo, warship, U-boat, bomber) ---
     for (const e of game.enemies) {
       if (!DYNAMIC.has(e.type)) continue;
@@ -1090,6 +1134,32 @@
       }
     }
 
+    // --- Advance player missiles: straight line; damage the first enemy in
+    // range (any depth), then expire. Also expire at the arena frame. ---
+    for (const mi of missiles) {
+      if (!mi.active) continue;
+      mi.x += mi.vx * delta;
+      mi.z += mi.vz * delta;
+      const mu = (mi.x - mi.z) * Math.SQRT1_2;
+      const mv = (mi.x + mi.z) * Math.SQRT1_2;
+      if (Math.abs(mu) > FRAME_U || Math.abs(mv) > FRAME_V) {
+        mi.active = false;
+        continue;
+      }
+      for (const e of game.enemies) {
+        const m = movers[e.id];
+        if (!m) continue;
+        const dx = mi.x - m.x;
+        const dz = mi.z - m.z;
+        if (dx * dx + dz * dz < MISSILE_HIT_R2) {
+          e.hp -= config.player.missiles.damage;
+          spawnBlastVisual(mi.x, mi.z);
+          mi.active = false;
+          break;
+        }
+      }
+    }
+
     // --- Mines: floating contact hazards. Detonate on contact with the sub at
     // ANY depth (above or below), damaging it and clearing that mine (which
     // frees a slot for the minelayer to lay another). ---
@@ -1326,6 +1396,41 @@
           transparent
           opacity={0.55 * (1 - i * 0.1)}
           depthWrite={false}
+        />
+      </T.Mesh>
+    {/each}
+  {/if}
+{/each}
+
+<!-- Player missiles (M ability): a bright body with a nose glow and a short
+     orange exhaust trail — clearly distinct from the enemy's grey torpedo. -->
+{#each missiles as mi}
+  {#if mi.active}
+    {@const ang = Math.atan2(mi.vx, mi.vz)}
+    {@const inv = 1 / (Math.hypot(mi.vx, mi.vz) || 1)}
+    {@const bx = -mi.vx * inv}
+    {@const bz = -mi.vz * inv}
+    <T.Mesh position={[mi.x, MISSILE_Y, mi.z]} rotation={[0, ang, 0]} castShadow>
+      <T.BoxGeometry args={[0.12, 0.12, 0.5]} />
+      <T.MeshStandardMaterial color="#eef4f8" emissive="#8fd0ff" emissiveIntensity={0.4} flatShading />
+    </T.Mesh>
+    <!-- Nose glow (front = opposite the trail direction). -->
+    <T.Mesh position={[mi.x - bx * 0.3, MISSILE_Y, mi.z - bz * 0.3]}>
+      <T.SphereGeometry args={[0.08, 8, 6]} />
+      <T.MeshBasicMaterial color="#bfe8ff" toneMapped={false} />
+    </T.Mesh>
+    <!-- Exhaust trail. -->
+    {#each Array.from({ length: 4 }) as _, i}
+      {@const d = 0.3 + i * 0.16}
+      {@const s = Math.max(0.03, 0.1 * (1 - i * 0.2))}
+      <T.Mesh position={[mi.x + bx * d, MISSILE_Y, mi.z + bz * d]}>
+        <T.SphereGeometry args={[s, 8, 6]} />
+        <T.MeshBasicMaterial
+          color="#ffa83a"
+          transparent
+          opacity={0.75 * (1 - i * 0.2)}
+          depthWrite={false}
+          toneMapped={false}
         />
       </T.Mesh>
     {/each}
