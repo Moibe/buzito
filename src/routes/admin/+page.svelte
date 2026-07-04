@@ -101,6 +101,23 @@
             más filosas (multiplicador de poder).
           </p>
         </header>
+
+        <!-- Enemy-type palette. Future: drag one onto a mission to add a copy. -->
+        <div class="palette">
+          <div class="palette-head">
+            <strong>Tipos de enemigos</strong>
+            <span>Arrástralos a una misión para añadir uno (próximamente)</span>
+          </div>
+          <div class="palette-items">
+            {#each Object.entries(ENEMY_INFO) as [type, info]}
+              <div class="palette-item" draggable="true" data-type={type} title={info.name}>
+                <span class="pi-emoji">{info.emoji}</span>
+                <span>{info.name}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+
         <div class="missions">
           {#each MISSIONS as m}
             <article class="mission">
@@ -365,6 +382,60 @@
   .setting-input .unit {
     color: rgba(255, 255, 255, 0.7);
     font-weight: 700;
+  }
+
+  /* --- Enemy-type palette (drag source, for the future) --- */
+  .palette {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+  }
+  .palette-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .palette-head strong {
+    font-size: 13px;
+    color: #fff;
+  }
+  .palette-head span {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .palette-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .palette-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 13px;
+    color: #fff;
+    cursor: grab;
+    user-select: none;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .palette-item:hover {
+    background: rgba(255, 255, 255, 0.13);
+    border-color: rgba(147, 197, 253, 0.6);
+    transform: translateY(-1px);
+  }
+  .palette-item:active {
+    cursor: grabbing;
+  }
+  .pi-emoji {
+    font-size: 15px;
   }
 
   /* --- Missions --- */
