@@ -98,7 +98,12 @@
       style="left: {game.menuSx + 24 + 138}px; top: {game.menuSy - 30 + 60}px;"
       role="menu"
     >
-      <button onclick={() => toggleEnemyActive(selectedEnemy.id)}>
+      <button
+        onclick={() => {
+          toggleEnemyActive(selectedEnemy.id);
+          closeEnemyMenu();
+        }}
+      >
         {selectedEnemy.active ? 'Desactivar' : 'Activar'}
       </button>
       <button class="back" onclick={() => (game.menuMode = null)}>← Atrás</button>
