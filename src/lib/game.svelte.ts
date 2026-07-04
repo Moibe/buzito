@@ -55,9 +55,6 @@ export const config = $state({
     // Speed boost — multiplies the base sub speed while enabled.
     speedBoost: { enabled: false, mult: 1.7 },
   },
-  // Fraction of the arena's tiles you must submerge over to clear a stage
-  // (1 = all of them; lower it if covering the whole board feels too long).
-  stage: { coverage: 1.0 },
   enemies: {
     warship: { hp: 100, ram: 8, speed: 2.8, fireInterval: 0.08, tracerDamage: 1, range: 2 },
     cargo: { hp: 80, ram: 18, speed: 2.0 },
@@ -129,13 +126,6 @@ export const game = $state({
   missions: pickRandomCities(8),
   // The city of the mission currently being played (set by startLevel).
   missionCity: '',
-  // Current stage within the level (1..STAGE_COUNT). Clear a stage by
-  // submerging over the coverage target of tiles.
-  stage: 1,
-  // True once all 4 stages are cleared (shows the "level complete" overlay).
-  levelComplete: false,
-  // Transient banner value on stage transitions (decayed per-frame by Scene).
-  stageFlash: 0,
   x: 0,
   z: 0,
   heading: 0,
