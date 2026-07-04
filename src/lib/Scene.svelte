@@ -169,7 +169,6 @@
   const TURN_RATE = 1.8; // rad/s
   const MAX_SPEED = 3.0; // world units/s surfaced
   const REVERSE_FACTOR = 0.4; // reverse is slower than ahead
-  const SUBMERGED_FACTOR = 0.5; // submerged runs on batteries — half speed
 
   // --- Keyboard state ---
   // Plain object mutated by the listeners and read in useTask — no
@@ -252,7 +251,8 @@
     if (alive && keys.right) game.heading -= TURN_RATE * delta;
 
     let speed = 0;
-    if (alive && keys.up) speed += MAX_SPEED * (game.submerged ? SUBMERGED_FACTOR : 1);
+    // Same speed surfaced or submerged (no dive penalty).
+    if (alive && keys.up) speed += MAX_SPEED;
     if (alive && keys.down) speed -= MAX_SPEED * REVERSE_FACTOR;
 
     const fwdX = -Math.sin(game.heading);
