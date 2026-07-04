@@ -980,20 +980,29 @@
      matching depth). Gentle shared bob/scale pulse. -->
 {#each pickups as p}
   {#if p.active}
-    {@const py = p.submerged ? 0.28 : 0.55}
-    {@const s = 0.26 * (1 + 0.12 * pickupPulse)}
+    {@const py = p.submerged ? 0.3 : 0.55}
+    {@const s = 0.27 * (1 + 0.12 * pickupPulse)}
     <T.Mesh position={[p.x, py + 0.04 * pickupPulse, p.z]} scale={[s, s, s]}>
       <T.SphereGeometry args={[1, 16, 12]} />
       <T.MeshStandardMaterial
-        color={p.submerged ? '#2a9fd6' : '#5fe8ff'}
-        emissive={p.submerged ? '#155a72' : '#37c4e6'}
-        emissiveIntensity={0.7}
+        color={p.submerged ? '#4fdcff' : '#5fe8ff'}
+        emissive={p.submerged ? '#2ab6e6' : '#37c4e6'}
+        emissiveIntensity={p.submerged ? 1.2 : 0.7}
         transparent={p.submerged}
-        opacity={p.submerged ? 0.55 : 1}
+        opacity={p.submerged ? 0.75 : 1}
         depthWrite={!p.submerged}
         flatShading
       />
     </T.Mesh>
+    {#if p.submerged}
+      <!-- Surface marker: a pulsing cyan ring on the water directly above a
+           submerged orb so it's easy to spot (dive there to collect it). -->
+      {@const mr = 0.6 * (1 + 0.28 * pickupPulse)}
+      <T.Mesh position={[p.x, 0.47, p.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[mr, mr, mr]}>
+        <T.RingGeometry args={[0.6, 1.0, 24]} />
+        <T.MeshBasicMaterial color="#5fe8ff" transparent opacity={0.6} depthWrite={false} toneMapped={false} />
+      </T.Mesh>
+    {/if}
   {/if}
 {/each}
 
