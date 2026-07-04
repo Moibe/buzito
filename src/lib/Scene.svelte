@@ -501,7 +501,7 @@
 
   const projScratch = new Vector3();
   useTask((delta) => {
-    // --- Dynamic enemy motion (cargo + warship) ---
+    // --- Dynamic enemy motion (cargo + warship + U-boat) ---
     for (const e of game.enemies) {
       if (!DYNAMIC.has(e.type)) continue;
       const m = movers[e.id];
