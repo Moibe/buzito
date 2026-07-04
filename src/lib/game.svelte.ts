@@ -169,10 +169,13 @@ export const game = $state({
   screen: 'select' as 'select' | 'play',
   // Currently selected mission slot (1-8). Cosmetic for now — all lead to arena.
   level: 1,
-  // The 8 missions: random cities drawn from the world's 100 largest. Picked
-  // once at load; reshuffleMissions() draws a fresh set.
+  // The 8 campaign cities: random from the world's 100 largest. The player
+  // picks them in ANY order — the Nth city they beat is played at difficulty N.
   missions: pickRandomCities(8),
-  // The city of the mission currently being played (set by startLevel).
+  // Cities already beaten (by name). length = how many levels are cleared, so
+  // the NEXT pick is played at level (completed.length + 1).
+  completed: [] as string[],
+  // The city of the mission currently being played (set by startMission).
   missionCity: '',
   // Difficulty multiplier of the current mission (Scene scales enemy stats by
   // this; 1 = baseline). Set by startLevel from the missions table.
@@ -294,20 +297,32 @@ export function respawnEnemies() {
   closeEnemyMenu();
 }
 
-// Enter a mission's arena from the picker: fresh sub, fresh roster for that
-// mission's difficulty (types/counts + power).
-export function startLevel(n: number) {
-  game.level = n;
-  game.missionCity = game.missions[n - 1] ?? '';
-  game.missionPower = MISSIONS[Math.min(MISSIONS.length, Math.max(1, n)) - 1].power;
+// Play a chosen city. Its DIFFICULTY is the player's progress: the Nth city
+// beaten is played at level N, so this pick is level (completed + 1) — the
+// grid position is irrelevant.
+export function startMission(city: string) {
+  const level = Math.min(MISSIONS.length, game.completed.length + 1);
+  game.level = level;
+  game.missionCity = city;
+  game.missionPower = MISSIONS[level - 1].power;
   resetGame();
   respawnEnemies();
   game.screen = 'play';
 }
 
-// Draw a fresh random set of 8 mission cities (only meaningful on the picker).
+// Mark the current mission won and record its city as cleared (advances the
+// difficulty for the next pick). Idempotent.
+export function markMissionWon() {
+  game.won = true;
+  if (game.missionCity && !game.completed.includes(game.missionCity)) {
+    game.completed.push(game.missionCity);
+  }
+}
+
+// Draw a fresh random set of 8 cities and restart the campaign progress.
 export function reshuffleMissions() {
   game.missions = pickRandomCities(8);
+  game.completed = [];
 }
 
 // Back out of the arena to the level picker.

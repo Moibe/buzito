@@ -9,7 +9,7 @@
     toggleAllEnemies,
     respawnEnemies,
     resetGame,
-    startLevel,
+    startMission,
     goToLevelSelect,
     reshuffleMissions,
   } from '$lib/game.svelte';
@@ -17,6 +17,10 @@
 
   // The current mission's difficulty definition (for the level indicator).
   const mission = $derived(MISSIONS[game.level - 1] ?? MISSIONS[0]);
+  // Campaign progress: the NEXT city picked is played at this level.
+  const nextLevel = $derived(Math.min(MISSIONS.length, game.completed.length + 1));
+  const nextMission = $derived(MISSIONS[nextLevel - 1]);
+  const campaignDone = $derived(game.completed.length >= MISSIONS.length);
 
   const hpPct = $derived(
     config.sub.hp > 0 ? Math.min(100, (game.hp / config.sub.hp) * 100) : 0
@@ -45,20 +49,37 @@
 </script>
 
 {#if game.screen === 'select'}
-  <!-- Level picker: 8 numbered tiles (4 top, 4 bottom). Click one → its arena. -->
+  <!-- City picker. Pick any city in any order — the Nth you beat is played at
+       difficulty N. Beaten cities are marked and locked. -->
   <div class="levelselect">
     <h1 class="ls-title">buzito</h1>
-    <p class="ls-sub">Elige tu misión</p>
+    {#if campaignDone}
+      <p class="ls-sub">🏆 ¡Campaña completada! Liberaste las 8 ciudades.</p>
+    {:else}
+      <p class="ls-sub">
+        Elige tu ciudad — será tu
+        <b>Nivel {nextLevel}</b> · {nextMission.label}
+        <span class="ls-progress">({game.completed.length}/{MISSIONS.length} liberadas)</span>
+      </p>
+    {/if}
     <div class="ls-grid">
-      {#each game.missions as city, i}
-        <button class="ls-tile" onclick={() => startLevel(i + 1)}>
-          <span class="ls-tile-num">Nivel {i + 1}</span>
+      {#each game.missions as city}
+        {@const done = game.completed.includes(city)}
+        <button
+          class="ls-tile"
+          class:done
+          disabled={done}
+          onclick={() => startMission(city)}
+        >
+          {#if done}
+            <span class="ls-tile-check">✓</span>
+          {/if}
           <span class="ls-tile-city">{city}</span>
-          <span class="ls-tile-diff">{MISSIONS[i].label}</span>
+          <span class="ls-tile-diff">{done ? 'Liberada' : 'Disponible'}</span>
         </button>
       {/each}
     </div>
-    <button class="ls-reroll" onclick={reshuffleMissions}>🎲 Otras ciudades</button>
+    <button class="ls-reroll" onclick={reshuffleMissions}>🎲 Otras ciudades (reinicia)</button>
   </div>
 {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -392,11 +413,9 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     transition: transform 0.12s, background 0.15s, border-color 0.15s;
   }
-  .ls-tile-num {
-    font: 800 12px/1 system-ui, sans-serif;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: rgba(255, 215, 0, 0.55);
+  .ls-tile-check {
+    font: 800 20px/1 system-ui, sans-serif;
+    color: #4ade80;
   }
   .ls-tile-city {
     font: 700 16px/1.15 system-ui, sans-serif;
@@ -408,13 +427,24 @@
     font: 600 11px/1 system-ui, sans-serif;
     color: rgba(255, 255, 255, 0.6);
   }
-  .ls-tile:hover {
+  .ls-tile:hover:not(:disabled) {
     background: rgba(20, 45, 68, 0.92);
     border-color: rgba(255, 215, 0, 1);
     transform: translateY(-3px);
   }
-  .ls-tile:active {
+  .ls-tile:active:not(:disabled) {
     transform: translateY(0);
+  }
+  .ls-tile.done {
+    cursor: default;
+    color: rgba(74, 222, 128, 0.85);
+    border-color: rgba(74, 222, 128, 0.45);
+    background: rgba(10, 30, 22, 0.6);
+    opacity: 0.7;
+  }
+  .ls-progress {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
   }
   .ls-reroll {
     margin-top: 26px;

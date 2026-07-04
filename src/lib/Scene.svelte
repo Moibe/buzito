@@ -31,6 +31,7 @@
     closeEnemyMenu,
     damageSub,
     healSub,
+    markMissionWon,
     config,
     type EnemyType,
     type Enemy,
@@ -1511,7 +1512,7 @@
           game.visitedCount++;
         }
       }
-      game.won = true;
+      markMissionWon();
     }
 
     // --- Project every enemy to screen space so its HTML health bar can
