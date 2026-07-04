@@ -584,6 +584,7 @@
   // directions. They cross the arena and only hit the sub when it is SUBMERGED
   // (same depth) and in the line. A surface wake streak marks each one.
   const TORPEDO_HIT_R2 = 0.6 * 0.6;
+  const TORPEDO_Y = 0.47; // render height (just at the surface, above the tiles)
   type Torpedo = { active: boolean; x: number; z: number; vx: number; vz: number };
   const torpedoes = $state<Torpedo[]>(
     Array.from({ length: 16 }, () => ({ active: false, x: 0, z: 0, vx: 0, vz: 0 }))
@@ -1129,14 +1130,32 @@
   {/if}
 {/each}
 
-<!-- Torpedoes: a bright wake streak on the surface marking each torpedo's
-     path (it only harms a SUBMERGED sub, but the wake shows it topside too). -->
+<!-- Torpedoes: a dark, chunky underwater body with a long trailing stream of
+     bubbles behind it (reads as running below the surface). Only harms a
+     SUBMERGED sub, but stays visible topside. -->
 {#each torpedoes as t}
   {#if t.active}
-    <T.Mesh position={[t.x, 0.46, t.z]} rotation={[0, Math.atan2(t.vx, t.vz), 0]}>
-      <T.BoxGeometry args={[0.1, 0.05, 0.7]} />
-      <T.MeshBasicMaterial color="#dff2f8" transparent opacity={0.8} depthWrite={false} toneMapped={false} />
+    {@const ang = Math.atan2(t.vx, t.vz)}
+    {@const inv = 1 / (Math.hypot(t.vx, t.vz) || 1)}
+    {@const bx = -t.vx * inv}
+    {@const bz = -t.vz * inv}
+    <T.Mesh position={[t.x, TORPEDO_Y, t.z]} rotation={[0, ang, 0]} renderOrder={3}>
+      <T.BoxGeometry args={[0.15, 0.12, 0.85]} />
+      <T.MeshStandardMaterial color="#16232c" flatShading depthWrite={false} />
     </T.Mesh>
+    {#each Array.from({ length: 8 }) as _, i}
+      {@const d = 0.55 + i * 0.34}
+      {@const s = Math.max(0.025, 0.095 * (1 - i * 0.1))}
+      <T.Mesh position={[t.x + bx * d, TORPEDO_Y + 0.02, t.z + bz * d]} renderOrder={3}>
+        <T.SphereGeometry args={[s, 8, 6]} />
+        <T.MeshBasicMaterial
+          color="#bfe4f2"
+          transparent
+          opacity={0.55 * (1 - i * 0.1)}
+          depthWrite={false}
+        />
+      </T.Mesh>
+    {/each}
   {/if}
 {/each}
 
