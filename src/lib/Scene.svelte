@@ -21,6 +21,7 @@
     toggleSubmerged,
     markCurrentTile,
     selectEnemy,
+    closeEnemyMenu,
     damageSub,
     healSub,
     RAM_DAMAGE,
@@ -422,7 +423,8 @@
   const GUN_OFFSET = 0.6; // spawn a bit off the hull toward the sub
   const TRACER_SPEED = 18; // world units/s
   const TRACER_LIFE = 0.7; // seconds
-  const TRACER_HIT_R2 = 0.5 * 0.5; // squared radius counted as "on target"
+  const TRACER_HIT_R2 = 0.5 * 0.5; // squared radius counted as "on target" (sub)
+  const TRACER_ENEMY_R2 = 0.9 * 0.9; // friendly-fire hit radius vs an enemy hull
   const MUZZLE_DECAY = 0.05; // muzzle-flash fade time (s)
   const TRACER_POOL = 60;
   const tracers: Tracer[] = Array.from({ length: TRACER_POOL }, () => ({
@@ -515,7 +517,9 @@
     }
   }
 
-  function spawnBlast(x: number, z: number) {
+  // Just the expanding-ring visual (used for both bomb impacts and the puff
+  // when an enemy is destroyed).
+  function spawnBlastVisual(x: number, z: number) {
     const bl = blasts.find((b) => !b.active);
     if (bl) {
       bl.active = true;
@@ -523,12 +527,26 @@
       bl.z = z;
       bl.t = 0;
     }
-    if (game.gameOver) return;
-    // Bombs hit at ANY depth — no submerge escape.
-    const dx = x - game.x;
-    const dz = z - game.z;
-    if (dx * dx + dz * dz < BLAST_RADIUS * BLAST_RADIUS) {
-      damageSub(BOMB_DAMAGE, 'Una bomba del Bombardero te alcanzó.');
+  }
+
+  // A bomb impact: the visual + damage to the sub (any depth) AND to any enemy
+  // caught in the blast (friendly fire).
+  function spawnBlast(x: number, z: number) {
+    spawnBlastVisual(x, z);
+    const r2 = BLAST_RADIUS * BLAST_RADIUS;
+    if (!game.gameOver) {
+      const dx = x - game.x;
+      const dz = z - game.z;
+      if (dx * dx + dz * dz < r2) {
+        damageSub(BOMB_DAMAGE, 'Una bomba del Bombardero te alcanzó.');
+      }
+    }
+    for (const e of game.enemies) {
+      const m = movers[e.id];
+      if (!m) continue;
+      const ex = m.x - x;
+      const ez = m.z - z;
+      if (ex * ex + ez * ez < r2) e.hp -= BOMB_DAMAGE;
     }
   }
 
@@ -761,7 +779,8 @@
       }
     }
 
-    // --- Advance tracers ---
+    // --- Advance tracers (hit the surfaced sub, OR any enemy in the line of
+    // fire except the shooter — friendly fire). ---
     for (const t of tracers) {
       if (!t.active) continue;
       t.x += t.vx * delta;
@@ -769,12 +788,27 @@
       t.age += delta;
       if (t.age > TRACER_LIFE) {
         t.active = false;
-      } else if (!game.submerged) {
+        continue;
+      }
+      if (!game.submerged) {
         const ddx = t.x - game.x;
         const ddz = t.z - game.z;
         if (ddx * ddx + ddz * ddz < TRACER_HIT_R2) {
           t.active = false;
           damageSub(TRACER_DAMAGE, 'Las metralletas del destructor acabaron con tu casco.');
+          continue;
+        }
+      }
+      for (const e of game.enemies) {
+        if (e.id === warshipId) continue; // don't let the destroyer shoot itself
+        const m = movers[e.id];
+        if (!m) continue;
+        const ex = t.x - m.x;
+        const ez = t.z - m.z;
+        if (ex * ex + ez * ez < TRACER_ENEMY_R2) {
+          e.hp -= TRACER_DAMAGE;
+          t.active = false;
+          break;
         }
       }
     }
@@ -806,6 +840,17 @@
       if (bl.t >= BLAST_DUR) bl.active = false;
     }
 
+    // --- Remove enemies whose hull hit 0 (friendly fire), with a death puff.
+    // Backwards splice so indices stay valid. ---
+    for (let i = game.enemies.length - 1; i >= 0; i--) {
+      const e = game.enemies[i];
+      if (e.hp > 0) continue;
+      const m = movers[e.id];
+      if (m) spawnBlastVisual(m.x, m.z);
+      if (game.selectedEnemyId === e.id) closeEnemyMenu();
+      game.enemies.splice(i, 1);
+    }
+
     // --- Health pickups: collect at matching depth; respawn the trio 3 min
     // after it's cleared. ---
     pickupElapsed += delta;
@@ -826,6 +871,20 @@
     } else if (!game.gameOver) {
       pickupRespawnTimer -= delta;
       if (pickupRespawnTimer <= 0) spawnPickups();
+    }
+
+    // --- Project every enemy to screen space so its HTML health bar can
+    // follow it (camera is static, enemies move → reproject each frame). ---
+    if (cam) {
+      cam.updateMatrixWorld(true);
+      cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+      for (const e of game.enemies) {
+        const m = movers[e.id];
+        if (!m) continue;
+        projScratch.set(m.x, 0, m.z).project(cam);
+        e.sx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
+        e.sy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
+      }
     }
 
     // --- Keep the context menu anchored to the selected enemy each frame so

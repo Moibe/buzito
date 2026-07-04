@@ -78,6 +78,17 @@
   </div>
 {/if}
 
+<!-- Enemy health bars — a small bar to the upper-right of each enemy, following
+     its projected screen position (written by Scene each frame). -->
+{#each game.enemies as e (e.id)}
+  <div class="enemy-hp" style="left: {e.sx + 16}px; top: {e.sy - 34}px;">
+    <div
+      class="enemy-hp-fill"
+      style="width: {(e.hp / e.hpMax) * 100}%; background: hsl({120 * (e.hp / e.hpMax)}, 70%, 46%);"
+    ></div>
+  </div>
+{/each}
+
 <!-- Enemy context menu — main card + Acción submenu, anchored to the selected
      enemy's projected screen position (computed in Scene). Hidden while in
      Move mode (the board is being used to pick the destination). -->
@@ -156,6 +167,24 @@
     font: 700 15px/1 system-ui, sans-serif;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     letter-spacing: 0.03em;
+  }
+
+  /* Enemy health bar — small overlay tracking each enemy's screen position. */
+  .enemy-hp {
+    position: fixed;
+    z-index: 12;
+    width: 40px;
+    height: 5px;
+    background: rgba(10, 20, 30, 0.72);
+    border: 1px solid rgba(0, 0, 0, 0.5);
+    border-radius: 3px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .enemy-hp-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.15s linear;
   }
 
   /* TEMP (debug) button — distinct violet chrome so it reads as a scaffold

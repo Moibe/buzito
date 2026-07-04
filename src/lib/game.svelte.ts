@@ -21,6 +21,21 @@ export type Enemy = {
   // Whether the vessel's abilities are switched on. Toggled from its
   // context menu. Start inactive — the player activates them deliberately.
   active: boolean;
+  // Hull points (friendly fire from other enemies chips these). Dies at 0.
+  hp: number;
+  hpMax: number;
+  // Screen-space position of the enemy, written by Scene each frame so the
+  // HTML health bar overlay can follow it.
+  sx: number;
+  sy: number;
+};
+
+// Enemy hull capacity by class (hexa-turnos SHIP_CLASS_STATS hpMax values).
+export const ENEMY_HP: Record<EnemyType, number> = {
+  warship: 100,
+  cargo: 80,
+  bomber: 70,
+  submarineIx: 65,
 };
 
 // Submarine health — from hexa-turnos' ship model (SHIP_CLASS_STATS.submarine
@@ -64,10 +79,10 @@ export const game = $state({
 
   // --- Enemy vessels ---
   enemies: [
-    { id: 'warship-1', type: 'warship', name: 'Destructor', q: 6, r: -7, active: true },
-    { id: 'cargo-1', type: 'cargo', name: 'Carguero', q: -5, r: 4, active: true },
-    { id: 'bomber-1', type: 'bomber', name: 'Bombardero', q: 2, r: 2, active: true },
-    { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3, active: true },
+    { id: 'warship-1', type: 'warship', name: 'Destructor', q: 6, r: -7, active: true, hp: 100, hpMax: 100, sx: -9999, sy: -9999 },
+    { id: 'cargo-1', type: 'cargo', name: 'Carguero', q: -5, r: 4, active: true, hp: 80, hpMax: 80, sx: -9999, sy: -9999 },
+    { id: 'bomber-1', type: 'bomber', name: 'Bombardero', q: 2, r: 2, active: true, hp: 70, hpMax: 70, sx: -9999, sy: -9999 },
+    { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3, active: true, hp: 65, hpMax: 65, sx: -9999, sy: -9999 },
   ] as Enemy[],
   // Context-menu selection. selectedEnemyId = null → no menu open.
   // menuMode: null = main card only, 'action' = the Acción submenu is open.
