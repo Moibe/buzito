@@ -13,6 +13,10 @@
     goToLevelSelect,
     reshuffleMissions,
   } from '$lib/game.svelte';
+  import { MISSIONS } from '$lib/missions';
+
+  // The current mission's difficulty definition (for the level indicator).
+  const mission = $derived(MISSIONS[game.level - 1] ?? MISSIONS[0]);
 
   const hpPct = $derived(
     config.sub.hp > 0 ? Math.min(100, (game.hp / config.sub.hp) * 100) : 0
@@ -48,8 +52,9 @@
     <div class="ls-grid">
       {#each game.missions as city, i}
         <button class="ls-tile" onclick={() => startLevel(i + 1)}>
-          <span class="ls-tile-num">{i + 1}</span>
+          <span class="ls-tile-num">Nivel {i + 1}</span>
           <span class="ls-tile-city">{city}</span>
+          <span class="ls-tile-diff">{MISSIONS[i].label}</span>
         </button>
       {/each}
     </div>
@@ -82,8 +87,12 @@
 
 <!-- Submarine stats panel (top-left) — hull bar, hexa-turnos ShipStats style. -->
 <div class="stats">
-  <div class="stats-title">Submarino · Tipo VII</div>
-  <div class="stat-row">
+  <div class="stats-title">
+    <span class="lvl-badge">Nivel {game.level}</span>
+    <span class="lvl-diff">{mission.label}</span>
+  </div>
+  <div class="stat-sub">🎯 {game.missionCity}</div>
+  <div class="stat-row" style="margin-top: 10px;">
     <span class="stat-label">Casco</span>
     <span class="stat-value">{game.hp}/{config.sub.hp}</span>
   </div>
@@ -384,14 +393,20 @@
     transition: transform 0.12s, background 0.15s, border-color 0.15s;
   }
   .ls-tile-num {
-    font: 800 16px/1 system-ui, sans-serif;
-    color: rgba(255, 215, 0, 0.5);
+    font: 800 12px/1 system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(255, 215, 0, 0.55);
   }
   .ls-tile-city {
     font: 700 16px/1.15 system-ui, sans-serif;
     text-align: center;
     word-break: break-word;
     letter-spacing: 0.01em;
+  }
+  .ls-tile-diff {
+    font: 600 11px/1 system-ui, sans-serif;
+    color: rgba(255, 255, 255, 0.6);
   }
   .ls-tile:hover {
     background: rgba(20, 45, 68, 0.92);
@@ -730,12 +745,28 @@
     color: #ffd700;
   }
   .stats-title {
-    font-weight: 700;
-    font-size: 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .lvl-badge {
+    font-weight: 800;
+    font-size: 15px;
     color: #fff3b8;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
+  }
+  .lvl-diff {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 215, 0, 0.7);
+  }
+  .stat-sub {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.75);
     padding-bottom: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 2px;
     border-bottom: 1px solid rgba(255, 215, 0, 0.2);
   }
   .stat-row {

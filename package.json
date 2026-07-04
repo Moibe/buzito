@@ -24,6 +24,7 @@
 	"dependencies": {
 		"@threlte/core": "^8.5.12",
 		"@threlte/extras": "^9.21.0",
+		"flag-icons": "^7.5.0",
 		"three": "^0.184.0"
 	}
 }

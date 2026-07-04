@@ -145,7 +145,10 @@ function makeEnemiesForMission(n: number): Enemy[] {
   const counters: Partial<Record<EnemyType, number>> = {};
   return types.map((type, i) => {
     counters[type] = (counters[type] ?? 0) + 1;
-    const hp = Math.round(config.enemies[type].hp * m.power);
+    // Guard a cleared "Casco" panel field (→ null): keep the enemy alive
+    // instead of spawning hp=0 (instantly removed) / NaN bars.
+    const baseHp = config.enemies[type].hp > 0 ? config.enemies[type].hp : 1;
+    const hp = Math.max(1, Math.round(baseHp * m.power));
     return {
       id: `${type}-${counters[type]}`,
       type,

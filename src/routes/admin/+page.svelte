@@ -2,7 +2,7 @@
   import { enhance } from '$app/forms';
   import AdminSidebar from '$lib/AdminSidebar.svelte';
   import { MISSIONS, ENEMY_INFO } from '$lib/missions';
-  import { cityFlag, cityCountryCode } from '$lib/cityFlags';
+  import { cityFlagCode, cityCountry } from '$lib/cityFlags';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -61,7 +61,9 @@
           {#each data.cities as city}
             <li>
               <span class="city-name">{city}</span>
-              <span class="flag" title={cityCountryCode(city)}>{cityFlag(city)}</span>
+              {#if cityFlagCode(city)}
+                <span class="flag fi fi-{cityFlagCode(city)}" title={cityCountry(city)} aria-hidden="true"></span>
+              {/if}
             </li>
           {/each}
         </ol>
@@ -275,11 +277,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* Flag sits at the right edge of each pill, just past the name. */
+  /* Flag (flag-icons SVG) sits at the right edge of each pill, past the name.
+     Sized via font-size; subtle border so light flags don't vanish. */
   .cities .flag {
     margin-left: auto;
-    font-size: 16px;
-    line-height: 1;
+    flex-shrink: 0;
+    font-size: 15px;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
   }
 
   /* --- Missions --- */
