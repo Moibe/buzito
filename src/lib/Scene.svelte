@@ -289,14 +289,6 @@
   // toward the lower-left of the iso view, independent of the sub's heading.
   const CURRENT = axialToWorld(1, -1, TILE_SIZE);
 
-  // Spawn positions (static-enemy fallback + dynamic-mover init).
-  const enemyRender = $derived(
-    game.enemies.map((e) => {
-      const w = axialToWorld(e.q, e.r, TILE_SIZE);
-      return { e, x: w.x, z: w.z };
-    })
-  );
-
   // --- Enemy motion ---
   // DYNAMIC enemies (cargo + warship) are Scene-driven pure renderers whose
   // continuous world position lives here. STATIC enemies (tanker,
@@ -667,19 +659,8 @@
   scale={SUB_SCALE}
 />
 
-<!-- Enemy vessels — click one to open its context menu (activate/deactivate).
-     Each sits inside a status ring: gold when selected, green when active,
-     gray when inactive. -->
-{#each enemyRender as { e, x, z } (e.id)}
-  {@const dyn = DYNAMIC.has(e.type)}
-  {@const rp = dyn ? movers[e.id] : (livePos[e.id] ?? { x, z })}
-  {@const ringColor =
-    e.id === game.selectedEnemyId ? '#ffd700' : e.active ? '#4ade80' : '#5b6b7a'}
-  <T.Mesh position={[rp.x, 0.44, rp.z]} rotation={[-Math.PI / 2, 0, 0]}>
-    <T.RingGeometry args={[1.15, 1.5, 32]} />
-    <T.MeshBasicMaterial color={ringColor} transparent opacity={0.85} depthWrite={false} />
-  </T.Mesh>
-
+<!-- Enemy vessels — click one to open its context menu (activate/deactivate). -->
+{#each game.enemies as e (e.id)}
   {#if e.type === 'warship'}
     {@const m = movers[e.id]}
     <Warship
