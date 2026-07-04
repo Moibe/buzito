@@ -41,6 +41,9 @@ export const config = $state({
   // Shiny asterisk power-ups: collecting one "liberates" (marks visited) every
   // tile along its horizontal, vertical and both diagonal lines on screen.
   stars: { count: 3, respawn: 25 },
+  // X power-ups: like stars but liberate only the two diagonal lines of an X,
+  // at each one's own random angle.
+  xstars: { count: 3, respawn: 25 },
   // --- Player sub upgrades/abilities (the LEFT tuning panel binds to this).
   // Each has an `enabled` toggle so they can be switched on/off to test. ---
   player: {

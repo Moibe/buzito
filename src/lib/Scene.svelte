@@ -19,6 +19,7 @@
   import Minelayer from './Minelayer.svelte';
   import Mine from './Mine.svelte';
   import Star from './Star.svelte';
+  import XStar from './XStar.svelte';
   import Tracers from './Tracers.svelte';
   import { axialToWorld, worldToAxial, axialRound, buildBoardIsoRect } from './hex';
   import {
@@ -439,6 +440,8 @@
       for (const mn of mines) mn.active = false;
       for (const s of stars) s.active = false;
       starRespawnTimer = 0;
+      for (const s of xstars) s.active = false;
+      xstarRespawnTimer = 0;
     });
   });
 
@@ -762,6 +765,31 @@
     }
   }
 
+  // X power-ups: same collectible pattern, but each liberates only the two
+  // perpendicular lines of an X at its OWN random angle.
+  type XStar = { active: boolean; x: number; z: number; angle: number };
+  const xstars = $state<XStar[]>(
+    Array.from({ length: 8 }, () => ({ active: false, x: 0, z: 0, angle: 0 }))
+  );
+  let xstarRespawnTimer = 0;
+  function spawnXStars() {
+    const count = Math.max(0, Math.min(xstars.length, Math.round(config.xstars.count)));
+    for (let i = 0; i < xstars.length; i++) {
+      if (i < count) {
+        const p = randomArenaPoint();
+        const raw = worldToAxial(p.x, p.z, TILE_SIZE);
+        const a = axialRound(raw.q, raw.r);
+        const w = axialToWorld(a.q, a.r, TILE_SIZE);
+        xstars[i].active = true;
+        xstars[i].x = w.x;
+        xstars[i].z = w.z;
+        xstars[i].angle = Math.random() * Math.PI * 2; // any orientation
+      } else {
+        xstars[i].active = false;
+      }
+    }
+  }
+
   // Mark VISITED every real tile along the star's 4 screen lines (the asterisk):
   // horizontal (const v), vertical (const u) and both diagonals (world x / z).
   // Walk each of the 8 rays step by step from the star, snapping to the nearest
@@ -781,12 +809,15 @@
       game.visitedCount++;
     }
   }
-  function liberateAsterisk(sx: number, sz: number) {
+  // Walk each ray direction (world XZ) from (sx,sz), snapping to the nearest hex
+  // each small step, marking every real tile until it leaves the arena — so the
+  // lines are contiguous with no gaps. Also marks the origin tile.
+  function liberateRays(sx: number, sz: number, dirs: [number, number][]) {
     const S = Math.SQRT1_2;
     const step = TILE_SIZE * 0.3;
     const reach = (ARENA_HALF_U + ARENA_HALF_V) * 2;
     markTileAt(sx, sz);
-    for (const [dx, dz] of ASTERISK_DIRS) {
+    for (const [dx, dz] of dirs) {
       const len = Math.hypot(dx, dz);
       const nx = dx / len;
       const nz = dz / len;
@@ -799,6 +830,22 @@
         markTileAt(wx, wz);
       }
     }
+  }
+  // Star: all 4 screen lines (H, V, both diagonals) — the full asterisk.
+  function liberateAsterisk(sx: number, sz: number) {
+    liberateRays(sx, sz, ASTERISK_DIRS);
+  }
+  // X: just the two perpendicular lines of an X, rotated to an arbitrary angle
+  // theta (bars along local X and local Z under a Y-rotation of theta).
+  function liberateX(sx: number, sz: number, theta: number) {
+    const c = Math.cos(theta);
+    const s = Math.sin(theta);
+    liberateRays(sx, sz, [
+      [c, -s],
+      [-c, s],
+      [s, c],
+      [-s, -c],
+    ]);
   }
 
   // On revive, clear in-flight bombs / explosions from the previous life so a
@@ -816,6 +863,8 @@
       pickupRespawnTimer = 0;
       for (const s of stars) s.active = false;
       starRespawnTimer = 0;
+      for (const s of xstars) s.active = false;
+      xstarRespawnTimer = 0;
     }
   });
 
@@ -1312,6 +1361,27 @@
       if (starRespawnTimer <= 0) spawnStars();
     }
 
+    // --- X power-ups: collect on proximity (any depth) → liberate the two
+    // diagonal lines of the X at its angle; respawn a while after cleared. ---
+    if (xstars.some((s) => s.active)) {
+      if (!game.gameOver) {
+        for (const s of xstars) {
+          if (!s.active) continue;
+          const dx = s.x - game.x;
+          const dz = s.z - game.z;
+          if (dx * dx + dz * dz < STAR_RADIUS2) {
+            s.active = false;
+            liberateX(s.x, s.z, s.angle);
+            spawnBlastVisual(s.x, s.z);
+          }
+        }
+        if (!xstars.some((s) => s.active)) xstarRespawnTimer = config.xstars.respawn;
+      }
+    } else if (!game.gameOver) {
+      xstarRespawnTimer -= delta;
+      if (xstarRespawnTimer <= 0) spawnXStars();
+    }
+
     // --- Project every enemy to screen space so its HTML health bar can
     // follow it (camera is static, enemies move → reproject each frame). ---
     if (cam) {
@@ -1607,6 +1677,14 @@
 {#each stars as s}
   {#if s.active}
     <Star x={s.x} z={s.z} scale={SUB_SCALE} />
+  {/if}
+{/each}
+
+<!-- X power-ups: magenta crosses at a fixed random angle. Collect one to
+     liberate the two diagonal lines of the X. -->
+{#each xstars as s}
+  {#if s.active}
+    <XStar x={s.x} z={s.z} angle={s.angle} scale={SUB_SCALE} />
   {/if}
 {/each}
 

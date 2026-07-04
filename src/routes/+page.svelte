@@ -207,6 +207,10 @@
       <label class="knob"><span>Cantidad</span><input type="number" step="1" min="0" max="8" bind:value={config.stars.count} /></label>
       <label class="knob"><span>Reaparición (s)</span><input type="number" step="5" min="1" bind:value={config.stars.respawn} /></label>
 
+      <div class="cfg-sec">X (diagonales)</div>
+      <label class="knob"><span>Cantidad</span><input type="number" step="1" min="0" max="8" bind:value={config.xstars.count} /></label>
+      <label class="knob"><span>Reaparición (s)</span><input type="number" step="5" min="1" bind:value={config.xstars.respawn} /></label>
+
       <button class="cfg-regen" onclick={respawnEnemies}>♻ Regenerar enemigos (aplica casco)</button>
     </div>
   </div>
