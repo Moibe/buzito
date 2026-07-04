@@ -3,16 +3,19 @@
   import Scene from '$lib/Scene.svelte';
   import {
     game,
-    SUB_HP_MAX,
+    config,
     closeEnemyMenu,
     toggleEnemyActive,
     toggleAllEnemies,
+    respawnEnemies,
     resetGame,
   } from '$lib/game.svelte';
 
-  const hpPct = $derived((game.hp / SUB_HP_MAX) * 100);
+  const hpPct = $derived((game.hp / config.sub.hp) * 100);
   // TEMP (debug): whether any enemy is currently active.
   const enemiesActive = $derived(game.enemies.some((e) => e.active));
+  // TEMP (debug): tuning panel open/closed.
+  let showConfig = $state(false);
 
   // The enemy whose context menu is open (null = no menu).
   const selectedEnemy = $derived(
@@ -43,6 +46,8 @@
   <button class="debug-btn" onclick={toggleAllEnemies}>
     {enemiesActive ? '⏸ Detener enemigos' : '▶ Reactivar enemigos'}
   </button>
+  <!-- TEMP (debug): open the tuning panel. -->
+  <button class="debug-btn" onclick={() => (showConfig = !showConfig)}>⚙ Config</button>
 </div>
 
 <!-- Submarine stats panel (top-left) — hull bar, hexa-turnos ShipStats style. -->
@@ -50,7 +55,7 @@
   <div class="stats-title">Submarino · Tipo VII</div>
   <div class="stat-row">
     <span class="stat-label">Casco</span>
-    <span class="stat-value">{game.hp}/{SUB_HP_MAX}</span>
+    <span class="stat-value">{game.hp}/{config.sub.hp}</span>
   </div>
   <div class="stat-bar">
     <div class="stat-bar-fill hp" style="width: {hpPct}%"></div>
@@ -74,6 +79,60 @@
       <h1>¡Hundido!</h1>
       <p>{game.deathCause || 'Tu casco no aguantó.'}</p>
       <button onclick={resetGame}>Reintentar</button>
+    </div>
+  </div>
+{/if}
+
+<!-- TEMP (debug): live tuning panel for enemy/sub/pickup characteristics.
+     Bound directly to the reactive `config`; Scene reads it each frame so
+     most sliders take effect instantly (HP applies on "Regenerar enemigos"). -->
+{#if showConfig}
+  <div class="cfg-panel">
+    <div class="cfg-head">
+      <span>⚙ Configuración</span>
+      <button class="cfg-x" onclick={() => (showConfig = false)}>✕</button>
+    </div>
+    <div class="cfg-body">
+      <div class="cfg-sec">Submarino (jugador)</div>
+      <label class="knob"><span>Casco</span><input type="number" step="5" min="1" bind:value={config.sub.hp} /></label>
+      <label class="knob"><span>Velocidad</span><input type="number" step="0.1" min="0" bind:value={config.sub.speed} /></label>
+      <label class="knob"><span>Giro</span><input type="number" step="0.1" min="0" bind:value={config.sub.turnRate} /></label>
+
+      <div class="cfg-sec">Destructor</div>
+      <label class="knob"><span>Casco</span><input type="number" step="5" min="1" bind:value={config.enemies.warship.hp} /></label>
+      <label class="knob"><span>Embestida</span><input type="number" step="1" min="0" bind:value={config.enemies.warship.ram} /></label>
+      <label class="knob"><span>Velocidad</span><input type="number" step="0.1" min="0" bind:value={config.enemies.warship.speed} /></label>
+      <label class="knob"><span>Cadencia (s)</span><input type="number" step="0.01" min="0.01" bind:value={config.enemies.warship.fireInterval} /></label>
+      <label class="knob"><span>Daño bala</span><input type="number" step="1" min="0" bind:value={config.enemies.warship.tracerDamage} /></label>
+      <label class="knob"><span>Alcance (tiles)</span><input type="number" step="0.5" min="0" bind:value={config.enemies.warship.range} /></label>
+
+      <div class="cfg-sec">Carguero</div>
+      <label class="knob"><span>Casco</span><input type="number" step="5" min="1" bind:value={config.enemies.cargo.hp} /></label>
+      <label class="knob"><span>Embestida</span><input type="number" step="1" min="0" bind:value={config.enemies.cargo.ram} /></label>
+      <label class="knob"><span>Velocidad</span><input type="number" step="0.1" min="0" bind:value={config.enemies.cargo.speed} /></label>
+
+      <div class="cfg-sec">U-Boat</div>
+      <label class="knob"><span>Casco</span><input type="number" step="5" min="1" bind:value={config.enemies.submarineIx.hp} /></label>
+      <label class="knob"><span>Embestida</span><input type="number" step="1" min="0" bind:value={config.enemies.submarineIx.ram} /></label>
+      <label class="knob"><span>Velocidad</span><input type="number" step="0.1" min="0" bind:value={config.enemies.submarineIx.speed} /></label>
+      <label class="knob"><span>Prof. mín (s)</span><input type="number" step="0.5" min="0.5" bind:value={config.enemies.submarineIx.depthMin} /></label>
+      <label class="knob"><span>Prof. máx (s)</span><input type="number" step="0.5" min="0.5" bind:value={config.enemies.submarineIx.depthMax} /></label>
+
+      <div class="cfg-sec">Bombardero</div>
+      <label class="knob"><span>Casco</span><input type="number" step="5" min="1" bind:value={config.enemies.bomber.hp} /></label>
+      <label class="knob"><span>Embestida</span><input type="number" step="1" min="0" bind:value={config.enemies.bomber.ram} /></label>
+      <label class="knob"><span>Velocidad</span><input type="number" step="0.1" min="0" bind:value={config.enemies.bomber.speed} /></label>
+      <label class="knob"><span>Salva mín (s)</span><input type="number" step="0.5" min="0.5" bind:value={config.enemies.bomber.salvoMin} /></label>
+      <label class="knob"><span>Salva máx (s)</span><input type="number" step="0.5" min="0.5" bind:value={config.enemies.bomber.salvoMax} /></label>
+      <label class="knob"><span>Nº bombas</span><input type="number" step="1" min="1" bind:value={config.enemies.bomber.salvoSize} /></label>
+      <label class="knob"><span>Daño bomba</span><input type="number" step="1" min="0" bind:value={config.enemies.bomber.bombDamage} /></label>
+      <label class="knob"><span>Radio explosión</span><input type="number" step="0.2" min="0.2" bind:value={config.enemies.bomber.blastRadius} /></label>
+
+      <div class="cfg-sec">Esferas de vida</div>
+      <label class="knob"><span>Curación</span><input type="number" step="1" min="0" bind:value={config.pickup.heal} /></label>
+      <label class="knob"><span>Reaparición (s)</span><input type="number" step="10" min="5" bind:value={config.pickup.respawn} /></label>
+
+      <button class="cfg-regen" onclick={respawnEnemies}>♻ Regenerar enemigos (aplica casco)</button>
     </div>
   </div>
 {/if}
@@ -167,6 +226,94 @@
     font: 700 15px/1 system-ui, sans-serif;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     letter-spacing: 0.03em;
+  }
+
+  /* TEMP (debug): live tuning panel. Violet scaffold theme, scrollable. */
+  .cfg-panel {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 30;
+    width: 230px;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    background: rgba(30, 14, 40, 0.92);
+    border: 1px solid rgba(200, 130, 240, 0.6);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #e9b8ff;
+    font: 500 12px/1.2 system-ui, sans-serif;
+  }
+  .cfg-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(200, 130, 240, 0.25);
+    font-weight: 700;
+    color: #f0d8ff;
+  }
+  .cfg-x {
+    background: transparent;
+    border: none;
+    color: #e9b8ff;
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .cfg-body {
+    padding: 8px 12px 12px;
+    overflow-y: auto;
+  }
+  .cfg-sec {
+    margin: 12px 0 4px;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #c98fe6;
+    border-bottom: 1px dashed rgba(200, 130, 240, 0.3);
+    padding-bottom: 3px;
+  }
+  .cfg-sec:first-child {
+    margin-top: 0;
+  }
+  .knob {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+  }
+  .knob span {
+    color: rgba(233, 184, 255, 0.85);
+  }
+  .knob input {
+    width: 66px;
+    background: rgba(10, 6, 16, 0.7);
+    color: #fff;
+    border: 1px solid rgba(200, 130, 240, 0.5);
+    border-radius: 5px;
+    padding: 3px 6px;
+    font: 600 12px/1 system-ui, sans-serif;
+    text-align: right;
+  }
+  .cfg-regen {
+    width: 100%;
+    margin-top: 14px;
+    background: rgba(200, 130, 240, 0.18);
+    color: #f0d8ff;
+    border: 1px solid rgba(200, 130, 240, 0.7);
+    border-radius: 7px;
+    padding: 9px;
+    font: 700 12px/1 system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .cfg-regen:hover {
+    background: rgba(200, 130, 240, 0.32);
   }
 
   /* Enemy health bar — small overlay tracking each enemy's screen position. */

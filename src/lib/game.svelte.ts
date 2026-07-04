@@ -30,27 +30,48 @@ export type Enemy = {
   sy: number;
 };
 
-// Enemy hull capacity by class (hexa-turnos SHIP_CLASS_STATS hpMax values).
-export const ENEMY_HP: Record<EnemyType, number> = {
-  warship: 100,
-  cargo: 80,
-  bomber: 70,
-  submarineIx: 65,
-};
+// --- Tunable config (the in-game "knobs" panel binds to this; Scene reads it
+// LIVE each frame, so slider changes take effect immediately). HP changes
+// apply to enemies on the next "Regenerar enemigos" (respawnEnemies). ---
+export const config = $state({
+  sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
+  pickup: { heal: 12, respawn: 180 },
+  enemies: {
+    warship: { hp: 100, ram: 8, speed: 2.8, fireInterval: 0.08, tracerDamage: 1, range: 2 },
+    cargo: { hp: 80, ram: 18, speed: 2.0 },
+    submarineIx: { hp: 65, ram: 16, speed: 2.4, depthMin: 2.2, depthMax: 5.0 },
+    bomber: {
+      hp: 70,
+      ram: 20,
+      speed: 0.9,
+      salvoMin: 4.5,
+      salvoMax: 8.5,
+      salvoSize: 4,
+      bombDamage: 12,
+      blastRadius: 2.2,
+    },
+  },
+});
 
-// Submarine health — from hexa-turnos' ship model (SHIP_CLASS_STATS.submarine
-// Type VII: hpMax 50), reduced to the single player sub: no fuel/tonnage/turn
-// machinery, just hull points, damage and game over.
-export const SUB_HP_MAX = 50;
+// Static spawn definitions (identity + starting tile). Per-enemy HP comes from
+// config so the knobs panel controls it.
+const SPAWN_DEFS: { id: string; type: EnemyType; name: string; q: number; r: number }[] = [
+  { id: 'warship-1', type: 'warship', name: 'Destructor', q: 6, r: -7 },
+  { id: 'cargo-1', type: 'cargo', name: 'Carguero', q: -5, r: 4 },
+  { id: 'bomber-1', type: 'bomber', name: 'Bombardero', q: 2, r: 2 },
+  { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3 },
+];
 
-// Ramming damage per enemy class — hexa-turnos' ramDamage values (mass +
-// danger: a heavy bomber ship is catastrophic, a destroyer is a glancing blow).
-export const RAM_DAMAGE: Record<EnemyType, number> = {
-  warship: 8,
-  cargo: 18,
-  bomber: 20,
-  submarineIx: 16,
-};
+function makeEnemies(): Enemy[] {
+  return SPAWN_DEFS.map((d) => ({
+    ...d,
+    active: true,
+    hp: config.enemies[d.type].hp,
+    hpMax: config.enemies[d.type].hp,
+    sx: -9999,
+    sy: -9999,
+  }));
+}
 
 export const game = $state({
   x: 0,
@@ -59,7 +80,7 @@ export const game = $state({
   moving: false,
   submerged: false,
   // Hull points. Machine-gun tracers chip away at this while surfaced.
-  hp: SUB_HP_MAX,
+  hp: config.sub.hp,
   gameOver: false,
   // What sank the sub — shown on the game-over card.
   deathCause: '',
@@ -77,13 +98,11 @@ export const game = $state({
   // Set by Board once cells are computed.
   totalTiles: 0,
 
-  // --- Enemy vessels ---
-  enemies: [
-    { id: 'warship-1', type: 'warship', name: 'Destructor', q: 6, r: -7, active: true, hp: 100, hpMax: 100, sx: -9999, sy: -9999 },
-    { id: 'cargo-1', type: 'cargo', name: 'Carguero', q: -5, r: 4, active: true, hp: 80, hpMax: 80, sx: -9999, sy: -9999 },
-    { id: 'bomber-1', type: 'bomber', name: 'Bombardero', q: 2, r: 2, active: true, hp: 70, hpMax: 70, sx: -9999, sy: -9999 },
-    { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3, active: true, hp: 65, hpMax: 65, sx: -9999, sy: -9999 },
-  ] as Enemy[],
+  // --- Enemy vessels (seeded from config; rebuilt by respawnEnemies) ---
+  enemies: makeEnemies(),
+  // Bumped by respawnEnemies so Scene rebuilds each enemy's live mover
+  // (position/state) from the fresh list.
+  enemiesEpoch: 0,
   // Context-menu selection. selectedEnemyId = null → no menu open.
   // menuMode: null = main card only, 'action' = the Acción submenu is open.
   selectedEnemyId: null as string | null,
@@ -154,14 +173,22 @@ export function damageSub(amount: number, cause = 'Tu casco no aguantó.') {
 // Heal the hull (blue-orb pickup), clamped to full. No-op once sunk.
 export function healSub(amount: number) {
   if (game.gameOver) return;
-  game.hp = Math.min(SUB_HP_MAX, game.hp + amount);
+  game.hp = Math.min(config.sub.hp, game.hp + amount);
   game.healFlash = 1;
+}
+
+// Rebuild the enemy roster from config (fresh full HP at their spawn tiles,
+// dead ones revived). Bumps enemiesEpoch so Scene resets their live movers.
+export function respawnEnemies() {
+  game.enemies = makeEnemies();
+  game.enemiesEpoch++;
+  closeEnemyMenu();
 }
 
 // Restart after sinking: fresh hull, back to the arena center, progress
 // cleared. Enemies keep their state (position/active) — the threat remains.
 export function resetGame() {
-  game.hp = SUB_HP_MAX;
+  game.hp = config.sub.hp;
   game.gameOver = false;
   game.deathCause = '';
   game.hitFlash = 0;

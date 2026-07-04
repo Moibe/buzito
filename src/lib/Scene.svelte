@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core';
   import { interactivity } from '@threlte/extras';
+  import { untrack } from 'svelte';
   import { Vector3 } from 'three';
   import type {
     DirectionalLight as ThreeDirLight,
@@ -24,8 +25,9 @@
     closeEnemyMenu,
     damageSub,
     healSub,
-    RAM_DAMAGE,
+    config,
     type EnemyType,
+    type Enemy,
     type Tracer,
   } from './game.svelte';
 
@@ -167,9 +169,8 @@
   });
 
   // --- Movement tuning ---
-  const TURN_RATE = 1.8; // rad/s
-  const MAX_SPEED = 3.0; // world units/s surfaced
   const REVERSE_FACTOR = 0.4; // reverse is slower than ahead
+  // Player turn rate / speed live in config.sub (tunable from the panel).
 
   // --- Keyboard state ---
   // Plain object mutated by the listeners and read in useTask — no
@@ -248,13 +249,14 @@
   useTask((delta) => {
     // A sunk sub doesn't answer the helm — controls freeze until restart.
     const alive = !game.gameOver;
-    if (alive && keys.left) game.heading += TURN_RATE * delta;
-    if (alive && keys.right) game.heading -= TURN_RATE * delta;
+    const subSpeed = config.sub.speed;
+    if (alive && keys.left) game.heading += config.sub.turnRate * delta;
+    if (alive && keys.right) game.heading -= config.sub.turnRate * delta;
 
     let speed = 0;
     // Same speed surfaced or submerged (no dive penalty).
-    if (alive && keys.up) speed += MAX_SPEED;
-    if (alive && keys.down) speed -= MAX_SPEED * REVERSE_FACTOR;
+    if (alive && keys.up) speed += subSpeed;
+    if (alive && keys.down) speed -= subSpeed * REVERSE_FACTOR;
 
     const fwdX = -Math.sin(game.heading);
     const fwdZ = -Math.cos(game.heading);
@@ -297,20 +299,19 @@
   //
   // behavior: 'patrol' = bounce back and forth along an axis (u=horizontal,
   // v=vertical). 'roam' = slow, erratic wander with long pauses (the bomber).
+  // Structural movement config (speed is tunable — comes from config.enemies).
   type MoverCfg = {
     behavior: 'patrol' | 'roam';
-    patrolSpeed: number;
-    moveSpeed: number;
     margin: number;
     rotLerp: number;
     axis: 'u' | 'v';
   };
   const MOVER_CFG: Record<string, MoverCfg> = {
-    cargo: { behavior: 'patrol', patrolSpeed: 2.0, moveSpeed: 3.0, margin: 2.0, rotLerp: 6, axis: 'u' },
-    warship: { behavior: 'patrol', patrolSpeed: 2.8, moveSpeed: 3.2, margin: 2.0, rotLerp: 6, axis: 'u' },
-    submarineIx: { behavior: 'patrol', patrolSpeed: 2.4, moveSpeed: 3.0, margin: 2.0, rotLerp: 5, axis: 'v' },
+    cargo: { behavior: 'patrol', margin: 2.0, rotLerp: 6, axis: 'u' },
+    warship: { behavior: 'patrol', margin: 2.0, rotLerp: 6, axis: 'u' },
+    submarineIx: { behavior: 'patrol', margin: 2.0, rotLerp: 5, axis: 'v' },
     // The bomber creeps to random spots and sits idle for long stretches.
-    bomber: { behavior: 'roam', patrolSpeed: 0, moveSpeed: 0.9, margin: 2.5, rotLerp: 3, axis: 'u' },
+    bomber: { behavior: 'roam', margin: 2.5, rotLerp: 3, axis: 'u' },
   };
   const DYNAMIC = new Set<EnemyType>(Object.keys(MOVER_CFG) as EnemyType[]);
   // How long the bomber sits still between roams (random per idle).
@@ -326,9 +327,8 @@
     return dir > 0 ? -Math.PI / 4 : (3 * Math.PI) / 4;
   }
 
-  // The U-boat randomly alternates submerged/surfaced stretches along its run.
-  const UBOAT_SEG_MIN = 2.2; // seconds per depth segment (min)
-  const UBOAT_SEG_MAX = 5.0; // (max)
+  // U-boat depth-segment durations live in config.enemies.submarineIx
+  // (depthMin/depthMax), tunable from the panel.
 
   type Mover = {
     x: number;
@@ -341,30 +341,43 @@
     depthTimer: number; // seconds until the next depth flip (U-boat)
     roamTimer: number; // seconds of idle left before the next roam (bomber)
   };
+  function randDepthTime() {
+    const c = config.enemies.submarineIx;
+    return c.depthMin + Math.random() * (c.depthMax - c.depthMin);
+  }
+  function newMover(e: Enemy): Mover {
+    const w = axialToWorld(e.q, e.r, TILE_SIZE);
+    const cfg = MOVER_CFG[e.type];
+    return {
+      x: w.x,
+      z: w.z,
+      heading: patrolHeading(cfg.axis, 1),
+      dir: 1,
+      moving: false,
+      moveTarget: null,
+      submerged: false,
+      depthTimer: randDepthTime(),
+      roamTimer: ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN),
+    };
+  }
   const movers = $state<Record<string, Mover>>(
     Object.fromEntries(
-      game.enemies
-        .filter((e) => DYNAMIC.has(e.type))
-        .map((e) => {
-          const w = axialToWorld(e.q, e.r, TILE_SIZE);
-          const cfg = MOVER_CFG[e.type];
-          return [
-            e.id,
-            {
-              x: w.x,
-              z: w.z,
-              heading: patrolHeading(cfg.axis, 1),
-              dir: 1,
-              moving: false,
-              moveTarget: null,
-              submerged: false,
-              depthTimer: UBOAT_SEG_MIN + Math.random() * (UBOAT_SEG_MAX - UBOAT_SEG_MIN),
-              roamTimer: ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN),
-            },
-          ];
-        })
+      game.enemies.filter((e) => DYNAMIC.has(e.type)).map((e) => [e.id, newMover(e)])
     )
   );
+
+  // Rebuild movers when the roster is regenerated (respawnEnemies bumps the
+  // epoch) so revived/reset enemies return to their spawn tiles + state.
+  // untrack: only fire on epoch change, NOT when game.enemies mutates on death.
+  $effect(() => {
+    game.enemiesEpoch;
+    untrack(() => {
+      for (const k of Object.keys(movers)) delete movers[k];
+      for (const e of game.enemies) {
+        if (DYNAMIC.has(e.type)) movers[e.id] = newMover(e);
+      }
+    });
+  });
 
   // Live world position of an enemy (all enemies are movers now).
   function enemyPos(e: { id: string }) {
@@ -414,11 +427,8 @@
 
   // --- Destroyer guns ---
   // The warship strafes the SURFACED sub with its side machine guns whenever
-  // the sub is within SHOOT_RANGE_TILES ("cuadros"). Submerging breaks the
-  // line of fire — diving is the counter.
-  const SHOOT_RANGE_TILES = 2;
-  const FIRE_INTERVAL = 0.08; // seconds between rounds (machine-gun cadence)
-  const TRACER_DAMAGE = 1; // hull points per round on target
+  // the sub is within range ("cuadros"). Submerging breaks the line of fire —
+  // diving is the counter. Range / fire rate / damage live in config.enemies.
   const GUN_Y = 0.62; // tracer height (about the gun mounts)
   const GUN_OFFSET = 0.6; // spawn a bit off the hull toward the sub
   const TRACER_SPEED = 18; // world units/s
@@ -468,19 +478,15 @@
   // around the sub. Where each lands it explodes, damaging the sub at ANY
   // depth — unlike guns/ram, diving does NOT save you; you must move clear.
   const bomberId = game.enemies.find((e) => e.type === 'bomber')?.id;
-  const BOMB_INTERVAL_MIN = 4.5; // seconds between salvos
-  const BOMB_INTERVAL_MAX = 8.5;
-  const BOMB_SALVO_MIN = 3;
-  const BOMB_SALVO_MAX = 5;
+  // Salvo interval / size / bomb damage / blast radius live in
+  // config.enemies.bomber (tunable). The rest are structural.
   const BOMB_SPREAD = 3.6; // scatter radius of targets around the sub
   const BOMB_FLIGHT = 1.35; // seconds per arc
   const BOMB_LAUNCH_Y = 0.7; // launch height (bomber deck)
   const BOMB_ARC_H = 2.6; // parabola peak height above the straight line
   const SEA_Y = 0.42; // impact / sea-surface height
-  const BLAST_RADIUS = 2.2; // world units; sub within this on impact → hit
   const BLAST_DUR = 0.5; // explosion visual lifetime (s)
-  const BOMB_DAMAGE = 12;
-  let bombTimer = BOMB_INTERVAL_MIN;
+  let bombTimer = config.enemies.bomber.salvoMin;
 
   type Bomb = {
     active: boolean;
@@ -500,7 +506,7 @@
   );
 
   function launchSalvo(sx: number, sz: number) {
-    const n = BOMB_SALVO_MIN + Math.floor(Math.random() * (BOMB_SALVO_MAX - BOMB_SALVO_MIN + 1));
+    const n = Math.max(1, Math.round(config.enemies.bomber.salvoSize));
     for (let i = 0; i < n; i++) {
       const b = bombs.find((x) => !x.active);
       if (!b) break;
@@ -533,12 +539,14 @@
   // caught in the blast (friendly fire).
   function spawnBlast(x: number, z: number) {
     spawnBlastVisual(x, z);
-    const r2 = BLAST_RADIUS * BLAST_RADIUS;
+    const dmg = config.enemies.bomber.bombDamage;
+    const r = config.enemies.bomber.blastRadius;
+    const r2 = r * r;
     if (!game.gameOver) {
       const dx = x - game.x;
       const dz = z - game.z;
       if (dx * dx + dz * dz < r2) {
-        damageSub(BOMB_DAMAGE, 'Una bomba del Bombardero te alcanzó.');
+        damageSub(dmg, 'Una bomba del Bombardero te alcanzó.');
       }
     }
     for (const e of game.enemies) {
@@ -546,7 +554,7 @@
       if (!m) continue;
       const ex = m.x - x;
       const ez = m.z - z;
-      if (ex * ex + ez * ez < r2) e.hp -= BOMB_DAMAGE;
+      if (ex * ex + ez * ez < r2) e.hp -= dmg;
     }
   }
 
@@ -555,9 +563,8 @@
   // touching one AT THE SAME DEPTH heals the sub. Once all three are taken, a
   // 3-minute timer runs before a fresh trio appears.
   const PICKUP_COUNT = 3;
-  const PICKUP_HEAL = 12;
   const PICKUP_RADIUS = 1.1;
-  const PICKUP_RESPAWN = 180; // seconds (3 minutes) after clearing the trio
+  // Heal amount / respawn delay live in config.pickup (tunable).
   type Pickup = { active: boolean; x: number; z: number; submerged: boolean };
   const pickups = $state<Pickup[]>(
     Array.from({ length: PICKUP_COUNT }, () => ({ active: false, x: 0, z: 0, submerged: false }))
@@ -583,7 +590,7 @@
     if (!game.gameOver) {
       for (const b of bombs) b.active = false;
       for (const bl of blasts) bl.active = false;
-      bombTimer = BOMB_INTERVAL_MIN;
+      bombTimer = config.enemies.bomber.salvoMin;
       for (const p of pickups) p.active = false;
       pickupRespawnTimer = 0;
     }
@@ -632,6 +639,7 @@
       const m = movers[e.id];
       const cfg = MOVER_CFG[e.type];
       if (!m || !cfg) continue;
+      const spd = config.enemies[e.type].speed; // tunable per-enemy speed
       let th = m.heading;
       if (m.moveTarget) {
         // Manual relocation glide (any direction) — overrides patrol.
@@ -639,7 +647,7 @@
         const dz = m.moveTarget.z - m.z;
         const dist = Math.hypot(dx, dz);
         if (dist > 0.02) {
-          const step = Math.min(cfg.moveSpeed * delta, dist);
+          const step = Math.min(spd * delta, dist);
           m.x += (dx / dist) * step;
           m.z += (dz / dist) * step;
           m.moving = true;
@@ -677,7 +685,7 @@
         if (cfg.axis === 'v') {
           const lim = ARENA_HALF_V - cfg.margin;
           const fwd = (-Math.sin(m.heading) - Math.cos(m.heading)) * S; // dv of forward
-          let nv = v + fwd * cfg.patrolSpeed * delta;
+          let nv = v + fwd * spd * delta;
           if (nv > lim) {
             nv = lim;
             m.dir = -1;
@@ -690,7 +698,7 @@
         } else {
           const lim = ARENA_HALF_U - cfg.margin;
           const fwd = (-Math.sin(m.heading) + Math.cos(m.heading)) * S; // du of forward
-          let nu = u + fwd * cfg.patrolSpeed * delta;
+          let nu = u + fwd * spd * delta;
           if (nu > lim) {
             nu = lim;
             m.dir = -1;
@@ -717,7 +725,7 @@
         m.depthTimer -= delta;
         if (m.depthTimer <= 0) {
           m.submerged = !m.submerged;
-          m.depthTimer = UBOAT_SEG_MIN + Math.random() * (UBOAT_SEG_MAX - UBOAT_SEG_MIN);
+          m.depthTimer = randDepthTime();
         }
       }
     }
@@ -731,14 +739,14 @@
       !!wm &&
       !game.submerged &&
       !game.gameOver &&
-      hexDistTiles(wm.x, wm.z, game.x, game.z) <= SHOOT_RANGE_TILES;
+      hexDistTiles(wm.x, wm.z, game.x, game.z) <= config.enemies.warship.range;
     if (canFire && wm) {
       fireCooldown -= delta;
       // Guard against spawning a huge burst after a long frame / tab-restore.
       let guard = 0;
       while (fireCooldown <= 0 && guard < 4) {
         spawnTracer(wm.x, wm.z, game.x, game.z);
-        fireCooldown += FIRE_INTERVAL;
+        fireCooldown += config.enemies.warship.fireInterval;
         guard++;
       }
       if (fireCooldown < 0) fireCooldown = 0;
@@ -774,7 +782,7 @@
       const dx = p.x - game.x;
       const dz = p.z - game.z;
       if (dx * dx + dz * dz < RAM_RADIUS * RAM_RADIUS) {
-        damageSub(RAM_DAMAGE[e.type], `Te embistió el ${e.name}.`);
+        damageSub(config.enemies[e.type].ram, `Te embistió el ${e.name}.`);
         ramCooldowns[e.id] = RAM_COOLDOWN;
       }
     }
@@ -795,7 +803,7 @@
         const ddz = t.z - game.z;
         if (ddx * ddx + ddz * ddz < TRACER_HIT_R2) {
           t.active = false;
-          damageSub(TRACER_DAMAGE, 'Las metralletas del destructor acabaron con tu casco.');
+          damageSub(config.enemies.warship.tracerDamage, 'Las metralletas del destructor acabaron con tu casco.');
           continue;
         }
       }
@@ -806,7 +814,7 @@
         const ex = t.x - m.x;
         const ez = t.z - m.z;
         if (ex * ex + ez * ez < TRACER_ENEMY_R2) {
-          e.hp -= TRACER_DAMAGE;
+          e.hp -= config.enemies.warship.tracerDamage;
           t.active = false;
           break;
         }
@@ -820,7 +828,9 @@
       bombTimer -= delta;
       if (bombTimer <= 0) {
         launchSalvo(bmm.x, bmm.z);
-        bombTimer = BOMB_INTERVAL_MIN + Math.random() * (BOMB_INTERVAL_MAX - BOMB_INTERVAL_MIN);
+        bombTimer =
+          config.enemies.bomber.salvoMin +
+          Math.random() * (config.enemies.bomber.salvoMax - config.enemies.bomber.salvoMin);
       }
     }
 
@@ -863,10 +873,10 @@
           const dz = p.z - game.z;
           if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
             p.active = false;
-            healSub(PICKUP_HEAL);
+            healSub(config.pickup.heal);
           }
         }
-        if (!pickups.some((p) => p.active)) pickupRespawnTimer = PICKUP_RESPAWN;
+        if (!pickups.some((p) => p.active)) pickupRespawnTimer = config.pickup.respawn;
       }
     } else if (!game.gameOver) {
       pickupRespawnTimer -= delta;
@@ -1026,7 +1036,7 @@
 {#each blasts as bl}
   {#if bl.active}
     {@const p = Math.min(bl.t / BLAST_DUR, 1)}
-    {@const r = 0.3 + BLAST_RADIUS * p}
+    {@const r = 0.3 + config.enemies.bomber.blastRadius * p}
     <T.Mesh position={[bl.x, SEA_Y + 0.04, bl.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[r, r, r]}>
       <T.RingGeometry args={[0.55, 1.0, 24]} />
       <T.MeshBasicMaterial color="#ffb24a" transparent opacity={(1 - p) * 0.9} depthWrite={false} toneMapped={false} />
