@@ -779,7 +779,8 @@
         m.torpedoTimer -= delta;
         if (m.torpedoTimer <= 0) {
           launchTorpedo(m.x, m.z);
-          m.torpedoTimer = config.enemies.shark.torpedoInterval;
+          // floor guard: a 0 typed in the panel would otherwise fire every frame
+          m.torpedoTimer = Math.max(0.1, config.enemies.shark.torpedoInterval);
         }
       } else if (e.type === 'shark') {
         // Don't let the timer run down while surfaced; fire soon after diving.
