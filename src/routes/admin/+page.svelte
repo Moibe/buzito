@@ -1,11 +1,13 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import AdminSidebar from '$lib/AdminSidebar.svelte';
+  import { MISSIONS, ENEMY_INFO } from '$lib/missions';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   let collapsed = $state(false);
+  let section = $state<'ciudades' | 'misiones'>('ciudades');
 
   // View Transitions to animate the collapse when supported.
   function withTransition(fn: () => void) {
@@ -46,18 +48,58 @@
   </div>
 {:else}
   <!-- Dashboard: glass sidebar + glass content panel -->
-  <AdminSidebar {collapsed} {toggleCollapsed} />
+  <AdminSidebar {collapsed} {toggleCollapsed} current={section} onNavigate={(s) => (section = s as typeof section)} />
   <main class="work glass" class:collapsed>
     <div class="work-scroll">
-      <header class="work-head">
-        <h2>Ciudades <span class="count">{data.cities.length}</span></h2>
-        <p>Pool maestro de ciudades. Cada partida elige 8 al azar como misiones.</p>
-      </header>
-      <ol class="cities">
-        {#each data.cities as city}
-          <li>{city}</li>
-        {/each}
-      </ol>
+      {#if section === 'ciudades'}
+        <header class="work-head">
+          <h2>Ciudades <span class="count">{data.cities.length}</span></h2>
+          <p>Pool maestro de ciudades. Cada partida elige 8 al azar como misiones.</p>
+        </header>
+        <ol class="cities">
+          {#each data.cities as city}
+            <li>{city}</li>
+          {/each}
+        </ol>
+      {:else if section === 'misiones'}
+        <header class="work-head">
+          <h2>Misiones <span class="count">{MISSIONS.length}</span></h2>
+          <p>
+            Dificultad creciente: la 1 es siempre la más fácil y la 8 la más difícil, sea cual
+            sea la ciudad. Sube con más enemigos, nuevos tipos (uno a la vez) y características
+            más filosas (multiplicador de poder).
+          </p>
+        </header>
+        <div class="missions">
+          {#each MISSIONS as m}
+            <article class="mission">
+              <div class="mission-top">
+                <span class="mnum">{m.n}</span>
+                <div class="mtitle">
+                  <strong>Misión {m.n}</strong>
+                  <span class="mlabel">{m.label}</span>
+                </div>
+                <span class="power" title="Multiplicador aplicado a casco / embestida / daño / cadencia / velocidad">
+                  Poder ×{m.power}
+                </span>
+              </div>
+              <div class="diffbar"><span style="width: {(m.n / MISSIONS.length) * 100}%"></span></div>
+              <div class="enemies">
+                {#each m.enemies as e}
+                  <span class="chip" class:isnew={m.newTypes.includes(e.type)}>
+                    <span class="chip-emoji">{ENEMY_INFO[e.type].emoji}</span>
+                    {ENEMY_INFO[e.type].name}
+                    <b>×{e.count}</b>
+                    {#if m.newTypes.includes(e.type)}<em>nuevo</em>{/if}
+                  </span>
+                {/each}
+                <span class="total">{m.total} en total</span>
+              </div>
+              <p class="mnote">{m.note}</p>
+            </article>
+          {/each}
+        </div>
+      {/if}
     </div>
   </main>
 {/if}
@@ -222,5 +264,121 @@
     font-variant-numeric: tabular-nums;
     font-size: 12px;
     font-weight: 700;
+  }
+
+  /* --- Missions --- */
+  .missions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .mission {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .mission-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .mnum {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(37, 99, 235, 0.3);
+    border: 1px solid rgba(147, 197, 253, 0.5);
+    border-radius: 9px;
+    font-weight: 800;
+    font-size: 15px;
+    color: #fff;
+  }
+  .mtitle {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+  .mtitle strong {
+    font-size: 14px;
+    color: #fff;
+  }
+  .mlabel {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .power {
+    margin-left: auto;
+    background: rgba(255, 215, 0, 0.14);
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    color: #ffe680;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .diffbar {
+    height: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 10px 0 12px;
+  }
+  .diffbar span {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #4ade80, #facc15 55%, #ef4444);
+  }
+  .enemies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .chip b {
+    color: #fff;
+  }
+  .chip-emoji {
+    font-size: 13px;
+  }
+  .chip.isnew {
+    border-color: rgba(74, 222, 128, 0.6);
+    background: rgba(74, 222, 128, 0.12);
+  }
+  .chip em {
+    font-style: normal;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: #86efac;
+  }
+  .total {
+    margin-left: auto;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    font-variant-numeric: tabular-nums;
+  }
+  .mnote {
+    margin: 10px 0 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.72);
   }
 </style>

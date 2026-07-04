@@ -8,9 +8,13 @@
   let {
     collapsed = false,
     toggleCollapsed,
+    current = 'ciudades',
+    onNavigate,
   }: {
     collapsed?: boolean;
     toggleCollapsed: () => void;
+    current?: string;
+    onNavigate?: (section: string) => void;
   } = $props();
 
   let tiltX = $state(0);
@@ -59,19 +63,28 @@
     </div>
 
     <nav>
-      <a href="/admin" class="nav-item" aria-current="page">
+      <button
+        type="button"
+        class="nav-item"
+        class:active={current === 'ciudades'}
+        onclick={() => onNavigate?.('ciudades')}
+      >
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </svg>
         <span>Ciudades</span>
-      </a>
-      <span class="nav-item soon">
+      </button>
+      <button
+        type="button"
+        class="nav-item"
+        class:active={current === 'misiones'}
+        onclick={() => onNavigate?.('misiones')}
+      >
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><path d="M4 22v-7" />
         </svg>
         <span>Misiones</span>
-        <em>pronto</em>
-      </span>
+      </button>
       <span class="nav-item soon">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
@@ -170,13 +183,18 @@
     display: flex;
     align-items: center;
     gap: 0.6rem;
+    width: 100%;
     padding: 0.7rem 0.95rem;
+    background: none;
     color: rgba(255, 255, 255, 0.92);
+    text-align: left;
     text-decoration: none;
+    font: inherit;
     font-size: 0.95rem;
     letter-spacing: 0.01em;
     border-radius: 8px;
     border: 1px solid transparent;
+    cursor: pointer;
     text-shadow:
       0 0 8px rgba(255, 255, 255, 0.22),
       0 0 18px rgba(255, 255, 255, 0.1);
@@ -195,7 +213,7 @@
     border-color: rgba(255, 255, 255, 0.16);
   }
 
-  .nav-item[aria-current='page'] {
+  .nav-item.active {
     color: #fff;
     background: rgba(37, 99, 235, 0.22);
     border-color: rgba(37, 99, 235, 0.5);
