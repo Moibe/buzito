@@ -14,7 +14,9 @@
     reshuffleMissions,
   } from '$lib/game.svelte';
 
-  const hpPct = $derived((game.hp / config.sub.hp) * 100);
+  const hpPct = $derived(
+    config.sub.hp > 0 ? Math.min(100, (game.hp / config.sub.hp) * 100) : 0
+  );
   // Mission coverage percentage (clamped to 100 for display).
   const missionPct = $derived(
     game.totalTiles > 0 ? Math.min(100, (game.visitedCount / game.totalTiles) * 100) : 0

@@ -238,7 +238,10 @@ export function damageSub(amount: number, cause = 'Tu casco no aguantó.') {
 // Heal the hull (blue-orb pickup), clamped to full. No-op once sunk.
 export function healSub(amount: number) {
   if (game.gameOver) return;
-  game.hp = Math.min(config.sub.hp, game.hp + amount);
+  // Guard against a cleared "Casco" panel field (config.sub.hp → null), which
+  // would make Math.min(null, …) = 0 and silently zero the hull.
+  const cap = config.sub.hp > 0 ? config.sub.hp : game.hp + amount;
+  game.hp = Math.min(cap, game.hp + amount);
   game.healFlash = 1;
 }
 
