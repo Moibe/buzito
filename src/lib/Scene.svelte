@@ -14,8 +14,17 @@
   import SubmarineIX from './SubmarineIX.svelte';
   import Cargo from './Cargo.svelte';
   import Tanker from './Tanker.svelte';
+  import Tracers from './Tracers.svelte';
   import { axialToWorld, worldToAxial, axialRound } from './hex';
-  import { game, toggleSubmerged, markCurrentTile, selectEnemy } from './game.svelte';
+  import {
+    game,
+    toggleSubmerged,
+    markCurrentTile,
+    selectEnemy,
+    damageSub,
+    type EnemyType,
+    type Tracer,
+  } from './game.svelte';
 
   // Enables Threlte pointer picking so the enemy meshes' onclick fires.
   interactivity();
@@ -235,12 +244,14 @@
   // bow. With rotation.y = θ, the bow (local -Z) points at world
   // (-sin θ, -cos θ) — see the coordinate conventions in hexa-turnos.
   useTask((delta) => {
-    if (keys.left) game.heading += TURN_RATE * delta;
-    if (keys.right) game.heading -= TURN_RATE * delta;
+    // A sunk sub doesn't answer the helm — controls freeze until restart.
+    const alive = !game.gameOver;
+    if (alive && keys.left) game.heading += TURN_RATE * delta;
+    if (alive && keys.right) game.heading -= TURN_RATE * delta;
 
     let speed = 0;
-    if (keys.up) speed += MAX_SPEED * (game.submerged ? SUBMERGED_FACTOR : 1);
-    if (keys.down) speed -= MAX_SPEED * REVERSE_FACTOR;
+    if (alive && keys.up) speed += MAX_SPEED * (game.submerged ? SUBMERGED_FACTOR : 1);
+    if (alive && keys.down) speed -= MAX_SPEED * REVERSE_FACTOR;
 
     const fwdX = -Math.sin(game.heading);
     const fwdZ = -Math.cos(game.heading);
@@ -277,8 +288,7 @@
   // toward the lower-left of the iso view, independent of the sub's heading.
   const CURRENT = axialToWorld(1, -1, TILE_SIZE);
 
-  // World positions of the STATIC enemies (for rendering + their status
-  // rings). The cargo is dynamic — see its live cargoX/cargoZ below.
+  // Spawn positions (static-enemy fallback + dynamic-mover init).
   const enemyRender = $derived(
     game.enemies.map((e) => {
       const w = axialToWorld(e.q, e.r, TILE_SIZE);
@@ -287,13 +297,50 @@
   );
 
   // --- Enemy motion ---
-  // Static enemies (warship/tanker/submarineIx) keep their own q/r glide
-  // driver; we mirror their LIVE world position here via onAnimate so the
-  // status ring and context menu track them as they glide toward a target.
+  // DYNAMIC enemies (cargo + warship) are Scene-driven pure renderers whose
+  // continuous world position lives here. STATIC enemies (tanker,
+  // submarineIx) keep their own q/r glide driver and just mirror their live
+  // position back via onAnimate so their ring/menu track them.
+  const DYNAMIC = new Set<EnemyType>(['cargo', 'warship']);
+
+  type MoverCfg = {
+    patrolSpeed: number;
+    moveSpeed: number;
+    margin: number;
+    rotLerp: number;
+  };
+  const MOVER_CFG: Record<string, MoverCfg> = {
+    cargo: { patrolSpeed: 2.0, moveSpeed: 3.0, margin: 2.0, rotLerp: 6 },
+    warship: { patrolSpeed: 2.8, moveSpeed: 3.2, margin: 2.0, rotLerp: 6 },
+  };
+
+  type Mover = {
+    x: number;
+    z: number;
+    heading: number;
+    dir: number; // +1 → +u (right), −1 → −u (left)
+    moving: boolean;
+    moveTarget: { x: number; z: number } | null;
+  };
+  const movers = $state<Record<string, Mover>>(
+    Object.fromEntries(
+      game.enemies
+        .filter((e) => DYNAMIC.has(e.type))
+        .map((e) => {
+          const w = axialToWorld(e.q, e.r, TILE_SIZE);
+          return [
+            e.id,
+            { x: w.x, z: w.z, heading: -Math.PI / 4, dir: 1, moving: false, moveTarget: null },
+          ];
+        })
+    )
+  );
+
+  // Live positions of STATIC enemies, mirrored from their driver via onAnimate.
   const livePos = $state<Record<string, { x: number; z: number }>>(
     Object.fromEntries(
       game.enemies
-        .filter((e) => e.type !== 'cargo')
+        .filter((e) => !DYNAMIC.has(e.type))
         .map((e) => {
           const w = axialToWorld(e.q, e.r, TILE_SIZE);
           return [e.id, { x: w.x, z: w.z }];
@@ -307,24 +354,11 @@
       p.z = z;
     }
   }
-
-  // Cargo: pure renderer driven from here. Patrols left↔right (the screen u
-  // axis) while ACTIVE; a manual "Mover" target overrides the patrol until
-  // reached, then the patrol resumes at the new row.
-  const cargoSpawn = (() => {
-    const c = game.enemies.find((e) => e.type === 'cargo');
-    return c ? axialToWorld(c.q, c.r, TILE_SIZE) : { x: 0, z: 0 };
-  })();
-  const CARGO_SPEED = 2.0; // patrol speed
-  const CARGO_MOVE_SPEED = 3.0; // manual relocation glide speed
-  const CARGO_MARGIN = 2.0; // bounce this far in from the arena edge
-  const CARGO_ROT_LERP = 6;
-  let cargoX = $state(cargoSpawn.x);
-  let cargoZ = $state(cargoSpawn.z);
-  let cargoHeading = $state(-Math.PI / 4);
-  let cargoDir = 1; // +1 → +u (right), −1 → −u (left)
-  let cargoMoving = $state(false);
-  let cargoMoveTarget: { x: number; z: number } | null = null;
+  // Live world position of any enemy (dynamic → mover, static → mirrored).
+  function enemyPos(e: { id: string; type: EnemyType; q: number; r: number }) {
+    if (DYNAMIC.has(e.type)) return movers[e.id];
+    return livePos[e.id] ?? axialToWorld(e.q, e.r, TILE_SIZE);
+  }
 
   // Placement clamp so a vehicle can't be sent into/through the frame.
   const PLACE_MARGIN = 2.0;
@@ -345,8 +379,8 @@
     const e = game.enemies.find((x) => x.id === game.selectedEnemyId);
     if (!e) return;
     const p = clampToArena(ev.point.x, ev.point.z);
-    if (e.type === 'cargo') {
-      cargoMoveTarget = p;
+    if (DYNAMIC.has(e.type)) {
+      movers[e.id].moveTarget = p;
     } else {
       // Fractional axial (no hex snap): axialToWorld(q,r) lands exactly on p,
       // so the ship's own driver glides it precisely there.
@@ -357,49 +391,168 @@
     game.moveMode = false;
   }
 
+  // --- Destroyer guns ---
+  // The warship strafes the SURFACED sub with its side machine guns whenever
+  // the sub is within SHOOT_RANGE_TILES ("cuadros"). Submerging breaks the
+  // line of fire — diving is the counter.
+  const SHOOT_RANGE_TILES = 2;
+  const FIRE_INTERVAL = 0.08; // seconds between rounds (machine-gun cadence)
+  const TRACER_DAMAGE = 1; // hull points per round on target
+  const GUN_Y = 0.62; // tracer height (about the gun mounts)
+  const GUN_OFFSET = 0.6; // spawn a bit off the hull toward the sub
+  const TRACER_SPEED = 18; // world units/s
+  const TRACER_LIFE = 0.7; // seconds
+  const TRACER_HIT_R2 = 0.5 * 0.5; // squared radius counted as "on target"
+  const MUZZLE_DECAY = 0.05; // muzzle-flash fade time (s)
+  const TRACER_POOL = 60;
+  const tracers: Tracer[] = Array.from({ length: TRACER_POOL }, () => ({
+    active: false,
+    x: 0,
+    y: 0,
+    z: 0,
+    vx: 0,
+    vz: 0,
+    age: 0,
+  }));
+  let fireCooldown = 0;
+  let muzzleFlash = $state(0);
+  let muzzleX = $state(0);
+  let muzzleZ = $state(0);
+  const warshipId = game.enemies.find((e) => e.type === 'warship')?.id;
+
+  // Distance in hex "cuadros" between two world points.
+  function hexDistTiles(ax: number, az: number, bx: number, bz: number) {
+    const a = worldToAxial(ax, az, TILE_SIZE);
+    const b = worldToAxial(bx, bz, TILE_SIZE);
+    const dq = a.q - b.q;
+    const dr = a.r - b.r;
+    return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+  }
+
+  function spawnTracer(sx: number, sz: number, tx: number, tz: number) {
+    const t = tracers.find((p) => !p.active);
+    if (!t) return;
+    let dx = tx - sx;
+    let dz = tz - sz;
+    const d = Math.hypot(dx, dz) || 1;
+    dx /= d;
+    dz /= d;
+    // Small random spread so the stream reads as machine-gun fire, not a beam.
+    const s = (Math.random() - 0.5) * 0.13;
+    const cs = Math.cos(s);
+    const sn = Math.sin(s);
+    const ndx = dx * cs - dz * sn;
+    const ndz = dx * sn + dz * cs;
+    t.active = true;
+    t.x = sx + ndx * GUN_OFFSET;
+    t.z = sz + ndz * GUN_OFFSET;
+    t.y = GUN_Y;
+    t.vx = ndx * TRACER_SPEED;
+    t.vz = ndz * TRACER_SPEED;
+    t.age = 0;
+    muzzleX = t.x;
+    muzzleZ = t.z;
+    muzzleFlash = 1;
+  }
+
   const projScratch = new Vector3();
   useTask((delta) => {
-    // --- Cargo motion (manual move target overrides patrol) ---
-    const cargo = game.enemies.find((e) => e.type === 'cargo');
-    let cargoTargetHeading = cargoHeading;
-    if (cargoMoveTarget) {
-      const dx = cargoMoveTarget.x - cargoX;
-      const dz = cargoMoveTarget.z - cargoZ;
-      const dist = Math.hypot(dx, dz);
-      if (dist > 0.02) {
-        const step = Math.min(CARGO_MOVE_SPEED * delta, dist);
-        cargoX += (dx / dist) * step;
-        cargoZ += (dz / dist) * step;
-        cargoMoving = true;
-        cargoTargetHeading = Math.atan2(-dx, -dz);
+    // --- Dynamic enemy motion (cargo + warship) ---
+    for (const e of game.enemies) {
+      if (!DYNAMIC.has(e.type)) continue;
+      const m = movers[e.id];
+      const cfg = MOVER_CFG[e.type];
+      if (!m || !cfg) continue;
+      let th = m.heading;
+      if (m.moveTarget) {
+        // Manual relocation glide (any direction) — overrides patrol.
+        const dx = m.moveTarget.x - m.x;
+        const dz = m.moveTarget.z - m.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist > 0.02) {
+          const step = Math.min(cfg.moveSpeed * delta, dist);
+          m.x += (dx / dist) * step;
+          m.z += (dz / dist) * step;
+          m.moving = true;
+          th = Math.atan2(-dx, -dz);
+        } else {
+          m.moveTarget = null;
+          m.moving = false;
+        }
+      } else if (e.active) {
+        // Patrol along u at the current row (v derived from live position).
+        const u = (m.x - m.z) * Math.SQRT1_2;
+        const v = (m.x + m.z) * Math.SQRT1_2;
+        const uLim = ARENA_HALF_U - cfg.margin;
+        let nu = u + m.dir * cfg.patrolSpeed * delta;
+        if (nu > uLim) {
+          nu = uLim;
+          m.dir = -1;
+        } else if (nu < -uLim) {
+          nu = -uLim;
+          m.dir = 1;
+        }
+        m.x = (nu + v) * Math.SQRT1_2;
+        m.z = (v - nu) * Math.SQRT1_2;
+        m.moving = true;
+        th = m.dir > 0 ? -Math.PI / 4 : (3 * Math.PI) / 4;
       } else {
-        cargoMoveTarget = null;
-        cargoMoving = false;
+        m.moving = false;
       }
-    } else if (cargo?.active) {
-      // Patrol along u at the current row (v derived from the live position).
-      const u = (cargoX - cargoZ) * Math.SQRT1_2;
-      const v = (cargoX + cargoZ) * Math.SQRT1_2;
-      const uLim = ARENA_HALF_U - CARGO_MARGIN;
-      let nu = u + cargoDir * CARGO_SPEED * delta;
-      if (nu > uLim) {
-        nu = uLim;
-        cargoDir = -1;
-      } else if (nu < -uLim) {
-        nu = -uLim;
-        cargoDir = 1;
-      }
-      cargoX = (nu + v) * Math.SQRT1_2;
-      cargoZ = (v - nu) * Math.SQRT1_2;
-      cargoMoving = true;
-      cargoTargetHeading = cargoDir > 0 ? -Math.PI / 4 : (3 * Math.PI) / 4;
-    } else {
-      cargoMoving = false;
+      let dh = th - m.heading;
+      while (dh > Math.PI) dh -= 2 * Math.PI;
+      while (dh < -Math.PI) dh += 2 * Math.PI;
+      m.heading += dh * Math.min(delta * cfg.rotLerp, 1);
     }
-    let dh = cargoTargetHeading - cargoHeading;
-    while (dh > Math.PI) dh -= 2 * Math.PI;
-    while (dh < -Math.PI) dh += 2 * Math.PI;
-    cargoHeading += dh * Math.min(delta * CARGO_ROT_LERP, 1);
+
+    // --- Destroyer guns: strafe the surfaced sub within range ---
+    const warship = warshipId ? game.enemies.find((e) => e.id === warshipId) : undefined;
+    const wm = warshipId ? movers[warshipId] : undefined;
+    const canFire =
+      !!warship &&
+      warship.active &&
+      !!wm &&
+      !game.submerged &&
+      !game.gameOver &&
+      hexDistTiles(wm.x, wm.z, game.x, game.z) <= SHOOT_RANGE_TILES;
+    if (canFire && wm) {
+      fireCooldown -= delta;
+      // Guard against spawning a huge burst after a long frame / tab-restore.
+      let guard = 0;
+      while (fireCooldown <= 0 && guard < 4) {
+        spawnTracer(wm.x, wm.z, game.x, game.z);
+        fireCooldown += FIRE_INTERVAL;
+        guard++;
+      }
+      if (fireCooldown < 0) fireCooldown = 0;
+    } else {
+      fireCooldown = 0;
+    }
+    if (muzzleFlash > 0) {
+      muzzleFlash = Math.max(0, muzzleFlash - delta / MUZZLE_DECAY);
+    }
+    // Red hit-vignette fade (set to 1 by damageSub, drawn by the HUD).
+    if (game.hitFlash > 0) {
+      game.hitFlash = Math.max(0, game.hitFlash - delta * 5);
+    }
+
+    // --- Advance tracers ---
+    for (const t of tracers) {
+      if (!t.active) continue;
+      t.x += t.vx * delta;
+      t.z += t.vz * delta;
+      t.age += delta;
+      if (t.age > TRACER_LIFE) {
+        t.active = false;
+      } else if (!game.submerged) {
+        const ddx = t.x - game.x;
+        const ddz = t.z - game.z;
+        if (ddx * ddx + ddz * ddz < TRACER_HIT_R2) {
+          t.active = false;
+          damageSub(TRACER_DAMAGE);
+        }
+      }
+    }
 
     // --- Anchor the open context menu to the selected enemy's live screen
     // position (follows a vehicle while it glides). ---
@@ -408,10 +561,7 @@
     if (c && id) {
       const e = game.enemies.find((x) => x.id === id);
       if (e) {
-        const w =
-          e.type === 'cargo'
-            ? { x: cargoX, z: cargoZ }
-            : livePos[e.id] ?? axialToWorld(e.q, e.r, TILE_SIZE);
+        const w = enemyPos(e);
         c.updateMatrixWorld(true);
         c.matrixWorldInverse.copy(c.matrixWorld).invert();
         projScratch.set(w.x, 0, w.z).project(c);
@@ -476,30 +626,32 @@
      Each sits inside a status ring: gold when selected, green when active,
      gray when inactive. -->
 {#each enemyRender as { e, x, z } (e.id)}
-  {@const isCargo = e.type === 'cargo'}
-  {@const live = isCargo ? { x: cargoX, z: cargoZ } : (livePos[e.id] ?? { x, z })}
+  {@const dyn = DYNAMIC.has(e.type)}
+  {@const rp = dyn ? movers[e.id] : (livePos[e.id] ?? { x, z })}
   {@const ringColor =
     e.id === game.selectedEnemyId ? '#ffd700' : e.active ? '#4ade80' : '#5b6b7a'}
-  <T.Mesh position={[live.x, 0.44, live.z]} rotation={[-Math.PI / 2, 0, 0]}>
+  <T.Mesh position={[rp.x, 0.44, rp.z]} rotation={[-Math.PI / 2, 0, 0]}>
     <T.RingGeometry args={[1.15, 1.5, 32]} />
     <T.MeshBasicMaterial color={ringColor} transparent opacity={0.85} depthWrite={false} />
   </T.Mesh>
 
   {#if e.type === 'warship'}
+    {@const m = movers[e.id]}
     <Warship
-      q={e.q}
-      r={e.r}
-      tileSize={TILE_SIZE}
+      x={m.x}
+      z={m.z}
+      heading={m.heading}
+      moving={m.moving}
       scale={SUB_SCALE}
       onclick={() => selectEnemy(e.id)}
-      onAnimate={(ax, az) => reportLive(e.id, ax, az)}
     />
   {:else if e.type === 'cargo'}
+    {@const m = movers[e.id]}
     <Cargo
-      x={cargoX}
-      z={cargoZ}
-      heading={cargoHeading}
-      moving={cargoMoving}
+      x={m.x}
+      z={m.z}
+      heading={m.heading}
+      moving={m.moving}
       scale={SUB_SCALE}
       onclick={() => selectEnemy(e.id)}
     />
@@ -523,6 +675,23 @@
     />
   {/if}
 {/each}
+
+<!-- Destroyer muzzle flash — spikes on each round fired, fades fast. -->
+{#if muzzleFlash > 0}
+  <T.Mesh position={[muzzleX, GUN_Y, muzzleZ]}>
+    <T.SphereGeometry args={[0.3, 8, 8]} />
+    <T.MeshBasicMaterial
+      color="#ffe08a"
+      transparent
+      opacity={muzzleFlash}
+      depthWrite={false}
+      toneMapped={false}
+    />
+  </T.Mesh>
+{/if}
+
+<!-- Machine-gun tracer rounds (pool driven by the useTask above). -->
+<Tracers pool={tracers} />
 
 <!-- Invisible sea plane: catches clicks on open water while in Move mode so
      the selected vehicle can be relocated to the click point. -->
