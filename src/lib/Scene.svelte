@@ -40,6 +40,52 @@
   // Enables Threlte pointer picking so the enemy meshes' onclick fires.
   interactivity();
 
+  // Enemy stats scaled by the CURRENT mission's power multiplier (harder
+  // missions = sharper stats). Panel edits still flow through (base is
+  // config.enemies); Scene reads THIS for gameplay. Fields not listed pass
+  // through unchanged. Speed is scaled gentler so it stays dodgeable.
+  function scaleEnemies(base: typeof config.enemies, power: number) {
+    const sp = 1 + (power - 1) * 0.6;
+    return {
+      warship: {
+        ...base.warship,
+        ram: base.warship.ram * power,
+        speed: base.warship.speed * sp,
+        tracerDamage: base.warship.tracerDamage * power,
+        fireInterval: base.warship.fireInterval / power,
+      },
+      cargo: { ...base.cargo, ram: base.cargo.ram * power, speed: base.cargo.speed * sp },
+      submarineIx: {
+        ...base.submarineIx,
+        ram: base.submarineIx.ram * power,
+        speed: base.submarineIx.speed * sp,
+      },
+      bomber: {
+        ...base.bomber,
+        ram: base.bomber.ram * power,
+        speed: base.bomber.speed * sp,
+        bombDamage: base.bomber.bombDamage * power,
+        salvoMin: base.bomber.salvoMin / power,
+        salvoMax: base.bomber.salvoMax / power,
+      },
+      shark: {
+        ...base.shark,
+        ram: base.shark.ram * power,
+        speed: base.shark.speed * sp,
+        torpedoDamage: base.shark.torpedoDamage * power,
+        torpedoInterval: base.shark.torpedoInterval / power,
+      },
+      minelayer: {
+        ...base.minelayer,
+        ram: base.minelayer.ram * power,
+        speed: base.minelayer.speed * sp,
+        mineDamage: base.minelayer.mineDamage * power,
+        dropInterval: base.minelayer.dropInterval / power,
+      },
+    };
+  }
+  const ep = $derived(scaleEnemies(config.enemies, game.missionPower));
+
   // Size of each hex in world units. Bigger TILE_SIZE → bigger tiles AND a
   // bigger submarine (SUB_SCALE tracks it), and — because the arena's world
   // extent below is fixed — FEWER tiles. The zoom-fit frames that fixed
@@ -377,6 +423,8 @@
     lineU: number;
     lineV: number;
     minesLaid: number; // mines dropped on the CURRENT line so far
+    gunCooldown: number; // seconds until the next tracer (each warship)
+    bombTimer: number; // seconds until the next salvo (each bomber)
   };
   // A random straight-line orientation for the minelayer, as a unit direction
   // in the camera-aligned u/v frame: horizontal (u), vertical (v), or one of
@@ -421,6 +469,11 @@
       lineU: line.u,
       lineV: line.v,
       minesLaid: 0,
+      gunCooldown: 0,
+      // Desync multiple bombers so their salvos don't land in lockstep.
+      bombTimer:
+        config.enemies.bomber.salvoMin +
+        Math.random() * (config.enemies.bomber.salvoMax - config.enemies.bomber.salvoMin),
     };
   }
   const movers = $state<Record<string, Mover>>(
@@ -518,11 +571,9 @@
     vz: 0,
     age: 0,
   }));
-  let fireCooldown = 0;
   let muzzleFlash = $state(0);
   let muzzleX = $state(0);
   let muzzleZ = $state(0);
-  const warshipId = game.enemies.find((e) => e.type === 'warship')?.id;
 
   // On revive (Reintentar → gameOver flips back to false), clear any rounds
   // still in flight from the previous life: the pool is Scene-local, so
@@ -534,7 +585,6 @@
       for (const t of tracers) t.active = false;
       for (const t of torpedoes) t.active = false;
       for (const mi of missiles) mi.active = false;
-      fireCooldown = 0;
       missileCooldown = 0;
       muzzleFlash = 0;
     }
@@ -560,15 +610,14 @@
   // The bomber lobs salvos of bombs in parabolic arcs to scattered points
   // around the sub. Where each lands it explodes, damaging the sub at ANY
   // depth — unlike guns/ram, diving does NOT save you; you must move clear.
-  const bomberId = game.enemies.find((e) => e.type === 'bomber')?.id;
   // Salvo interval / size / bomb damage / blast radius live in
-  // config.enemies.bomber (tunable). The rest are structural.
+  // config.enemies.bomber (tunable). The rest are structural. Each bomber keeps
+  // its OWN salvo timer in its mover (m.bombTimer).
   const BOMB_FLIGHT = 1.35; // seconds per arc
   const BOMB_LAUNCH_Y = 0.7; // launch height (bomber deck)
   const BOMB_ARC_H = 2.6; // parabola peak height above the straight line
   const SEA_Y = 0.42; // impact / sea-surface height
   const BLAST_DUR = 0.5; // explosion visual lifetime (s)
-  let bombTimer = config.enemies.bomber.salvoMin;
 
   type Bomb = {
     active: boolean;
@@ -621,8 +670,8 @@
   // caught in the blast (friendly fire).
   function spawnBlast(x: number, z: number) {
     spawnBlastVisual(x, z);
-    const dmg = config.enemies.bomber.bombDamage;
-    const r = config.enemies.bomber.blastRadius;
+    const dmg = ep.bomber.bombDamage;
+    const r = ep.bomber.blastRadius;
     const r2 = r * r;
     if (!game.gameOver) {
       const dx = x - game.x;
@@ -897,9 +946,6 @@
       for (const b of bombs) b.active = false;
       for (const bl of blasts) bl.active = false;
       for (const mn of mines) mn.active = false;
-      // untrack: reading config here must NOT subscribe this revive effect to
-      // the bomber knob (editing it live would otherwise wipe bombs + pickups).
-      bombTimer = untrack(() => config.enemies.bomber.salvoMin);
       for (const p of pickups) p.active = false;
       pickupRespawnTimer = 0;
       for (const s of stars) s.active = false;
@@ -920,9 +966,10 @@
     return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
   }
 
-  function spawnTracer(sx: number, sz: number, tx: number, tz: number) {
+  function spawnTracer(sx: number, sz: number, tx: number, tz: number, owner: string) {
     const t = tracers.find((p) => !p.active);
     if (!t) return;
+    t.owner = owner;
     let dx = tx - sx;
     let dz = tz - sz;
     const d = Math.hypot(dx, dz) || 1;
@@ -962,7 +1009,7 @@
       const m = movers[e.id];
       const cfg = MOVER_CFG[e.type];
       if (!m || !cfg) continue;
-      const spd = config.enemies[e.type].speed; // tunable per-enemy speed
+      const spd = ep[e.type].speed; // tunable per-enemy speed, scaled by mission power
       let th = m.heading;
       if (m.moveTarget) {
         // Manual relocation glide (any direction) — overrides patrol.
@@ -1106,11 +1153,11 @@
           launchTorpedo(m.x, m.z, fwdX, fwdZ);
           m.aimHeading = Math.random() * Math.PI * 2;
           // floor guard: a 0 typed in the panel would otherwise fire every frame
-          m.torpedoTimer = Math.max(0.1, config.enemies.shark.torpedoInterval);
+          m.torpedoTimer = Math.max(0.1, ep.shark.torpedoInterval);
         }
       } else if (e.type === 'shark') {
         // Don't let the timer run down while surfaced; fire soon after diving.
-        m.torpedoTimer = Math.min(m.torpedoTimer, config.enemies.shark.torpedoInterval);
+        m.torpedoTimer = Math.min(m.torpedoTimer, ep.shark.torpedoInterval);
       }
 
       // Minelayer: drop a floating mine on an interval, capped at maxMines.
@@ -1124,7 +1171,7 @@
           if (dropMine(m.x, m.z)) {
             m.minesLaid++;
             // floor guard: a 0 typed in the panel would otherwise drop every frame
-            m.mineTimer = Math.max(0.1, config.enemies.minelayer.dropInterval);
+            m.mineTimer = Math.max(0.1, ep.minelayer.dropInterval);
             if (m.minesLaid >= config.enemies.minelayer.maxMines) {
               const ln = randomLine();
               m.lineU = ln.u;
@@ -1138,28 +1185,29 @@
       }
     }
 
-    // --- Destroyer guns: strafe the surfaced sub within range ---
-    const warship = warshipId ? game.enemies.find((e) => e.id === warshipId) : undefined;
-    const wm = warshipId ? movers[warshipId] : undefined;
-    const canFire =
-      !!warship &&
-      warship.active &&
-      !!wm &&
-      !game.submerged &&
-      !game.gameOver &&
-      hexDistTiles(wm.x, wm.z, game.x, game.z) <= config.enemies.warship.range;
-    if (canFire && wm) {
-      fireCooldown -= delta;
-      // Guard against spawning a huge burst after a long frame / tab-restore.
-      let guard = 0;
-      while (fireCooldown <= 0 && guard < 4) {
-        spawnTracer(wm.x, wm.z, game.x, game.z);
-        fireCooldown += config.enemies.warship.fireInterval;
-        guard++;
+    // --- Destroyer guns: EVERY active warship strafes the surfaced sub when
+    // it's within range, each on its own cooldown. ---
+    for (const e of game.enemies) {
+      if (e.type !== 'warship' || !e.active) continue;
+      const wm = movers[e.id];
+      if (!wm) continue;
+      const canFire =
+        !game.submerged &&
+        !game.gameOver &&
+        hexDistTiles(wm.x, wm.z, game.x, game.z) <= ep.warship.range;
+      if (canFire) {
+        wm.gunCooldown -= delta;
+        // Guard against spawning a huge burst after a long frame / tab-restore.
+        let guard = 0;
+        while (wm.gunCooldown <= 0 && guard < 4) {
+          spawnTracer(wm.x, wm.z, game.x, game.z, e.id);
+          wm.gunCooldown += Math.max(0.02, ep.warship.fireInterval);
+          guard++;
+        }
+        if (wm.gunCooldown < 0) wm.gunCooldown = 0;
+      } else {
+        wm.gunCooldown = 0;
       }
-      if (fireCooldown < 0) fireCooldown = 0;
-    } else {
-      fireCooldown = 0;
     }
     if (muzzleFlash > 0) {
       muzzleFlash = Math.max(0, muzzleFlash - delta / MUZZLE_DECAY);
@@ -1215,7 +1263,7 @@
       const dx = p.x - game.x;
       const dz = p.z - game.z;
       if (dx * dx + dz * dz < RAM_RADIUS * RAM_RADIUS) {
-        damageSub(config.enemies[e.type].ram, `Te embistió el ${e.name}.`);
+        damageSub(ep[e.type].ram, `Te embistió el ${e.name}.`);
         ramCooldowns[e.id] = RAM_COOLDOWN;
       }
     }
@@ -1236,34 +1284,36 @@
         const ddz = t.z - game.z;
         if (ddx * ddx + ddz * ddz < TRACER_HIT_R2) {
           t.active = false;
-          damageSub(config.enemies.warship.tracerDamage, 'Las metralletas del destructor acabaron con tu casco.');
+          damageSub(ep.warship.tracerDamage, 'Las metralletas del destructor acabaron con tu casco.');
           continue;
         }
       }
       for (const e of game.enemies) {
-        if (e.id === warshipId) continue; // don't let the destroyer shoot itself
+        if (e.id === t.owner) continue; // don't let a warship shoot itself
         const m = movers[e.id];
         if (!m) continue;
         const ex = t.x - m.x;
         const ez = t.z - m.z;
         if (ex * ex + ez * ez < TRACER_ENEMY_R2) {
-          e.hp -= config.enemies.warship.tracerDamage;
+          e.hp -= ep.warship.tracerDamage;
           t.active = false;
           break;
         }
       }
     }
 
-    // --- Bomber: lob a salvo every so often while active ---
-    const bomber = bomberId ? game.enemies.find((e) => e.id === bomberId) : undefined;
-    const bmm = bomberId ? movers[bomberId] : undefined;
-    if (bomber?.active && bmm && !game.gameOver) {
-      bombTimer -= delta;
-      if (bombTimer <= 0) {
-        launchSalvo(bmm.x, bmm.z);
-        bombTimer =
-          config.enemies.bomber.salvoMin +
-          Math.random() * (config.enemies.bomber.salvoMax - config.enemies.bomber.salvoMin);
+    // --- Bomber: EVERY active bomber lobs salvos on its own timer. ---
+    if (!game.gameOver) {
+      for (const e of game.enemies) {
+        if (e.type !== 'bomber' || !e.active) continue;
+        const bmm = movers[e.id];
+        if (!bmm) continue;
+        bmm.bombTimer -= delta;
+        if (bmm.bombTimer <= 0) {
+          launchSalvo(bmm.x, bmm.z);
+          bmm.bombTimer =
+            ep.bomber.salvoMin + Math.random() * Math.max(0, ep.bomber.salvoMax - ep.bomber.salvoMin);
+        }
       }
     }
 
@@ -1302,7 +1352,7 @@
         const dz = t.z - game.z;
         if (dx * dx + dz * dz < TORPEDO_HIT_R2) {
           t.active = false;
-          damageSub(config.enemies.shark.torpedoDamage, 'Un torpedo del Tiburón te alcanzó.');
+          damageSub(ep.shark.torpedoDamage, 'Un torpedo del Tiburón te alcanzó.');
         }
       }
     }
@@ -1344,7 +1394,7 @@
         if (dx * dx + dz * dz < MINE_HIT_R2) {
           mn.active = false;
           spawnBlastVisual(mn.x, mn.z);
-          damageSub(config.enemies.minelayer.mineDamage, 'Chocaste con una mina.');
+          damageSub(ep.minelayer.mineDamage, 'Chocaste con una mina.');
         }
       }
     }

@@ -1,4 +1,5 @@
 import { pickRandomCities } from './cities';
+import { MISSIONS, ENEMY_INFO } from './missions';
 
 export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark' | 'minelayer';
 
@@ -12,6 +13,7 @@ export type Tracer = {
   vx: number;
   vz: number;
   age: number;
+  owner?: string; // id of the warship that fired it (skipped in friendly fire)
 };
 
 export type Enemy = {
@@ -94,26 +96,69 @@ export const config = $state({
   },
 });
 
-// Static spawn definitions (identity + starting tile). Per-enemy HP comes from
-// config so the knobs panel controls it.
-const SPAWN_DEFS: { id: string; type: EnemyType; name: string; q: number; r: number }[] = [
-  { id: 'warship-1', type: 'warship', name: 'Destructor', q: 6, r: -7 },
-  { id: 'cargo-1', type: 'cargo', name: 'Carguero', q: -5, r: 4 },
-  { id: 'bomber-1', type: 'bomber', name: 'Bombardero', q: 2, r: 2 },
-  { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3 },
-  { id: 'shark-1', type: 'shark', name: 'Tiburón', q: 0, r: -6 },
-  { id: 'minelayer-1', type: 'minelayer', name: 'Minador', q: -2, r: 5 },
+// Axial hex-ring helper (pure axial coords; no tile size needed). Ring k = the
+// 6k tiles at hex-distance k from the center.
+const AXIAL_DIRS: [number, number][] = [
+  [1, 0],
+  [1, -1],
+  [0, -1],
+  [-1, 0],
+  [-1, 1],
+  [0, 1],
 ];
+function hexRing(k: number): [number, number][] {
+  if (k <= 0) return [[0, 0]];
+  const out: [number, number][] = [];
+  let q = AXIAL_DIRS[4][0] * k;
+  let r = AXIAL_DIRS[4][1] * k;
+  for (let side = 0; side < 6; side++) {
+    for (let step = 0; step < k; step++) {
+      out.push([q, r]);
+      q += AXIAL_DIRS[side][0];
+      r += AXIAL_DIRS[side][1];
+    }
+  }
+  return out;
+}
 
-function makeEnemies(): Enemy[] {
-  return SPAWN_DEFS.map((d) => ({
-    ...d,
-    active: true,
-    hp: config.enemies[d.type].hp,
-    hpMax: config.enemies[d.type].hp,
-    sx: -9999,
-    sy: -9999,
-  }));
+// Spread `count` spawn tiles around the arena (away from the center, where the
+// sub starts), varying ring distance so they don't sit in one perfect circle.
+function missionSpawnTiles(count: number): { q: number; r: number }[] {
+  const rings = [6, 4, 8, 5, 7];
+  const tiles: { q: number; r: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const ring = hexRing(rings[i % rings.length]);
+    const t = ring[Math.floor((i / Math.max(1, count)) * ring.length) % ring.length];
+    tiles.push({ q: t[0], r: t[1] });
+  }
+  return tiles;
+}
+
+// Build the enemy roster for mission n (1..8) from the difficulty table: each
+// listed type × its count, placed on spread spawn tiles, with hull scaled by
+// the mission's power multiplier ("características más filosas").
+function makeEnemiesForMission(n: number): Enemy[] {
+  const m = MISSIONS[Math.min(MISSIONS.length, Math.max(1, n)) - 1];
+  const types: EnemyType[] = [];
+  for (const e of m.enemies) for (let i = 0; i < e.count; i++) types.push(e.type);
+  const tiles = missionSpawnTiles(types.length);
+  const counters: Partial<Record<EnemyType, number>> = {};
+  return types.map((type, i) => {
+    counters[type] = (counters[type] ?? 0) + 1;
+    const hp = Math.round(config.enemies[type].hp * m.power);
+    return {
+      id: `${type}-${counters[type]}`,
+      type,
+      name: ENEMY_INFO[type].name,
+      q: tiles[i].q,
+      r: tiles[i].r,
+      active: true,
+      hp,
+      hpMax: hp,
+      sx: -9999,
+      sy: -9999,
+    };
+  });
 }
 
 export const game = $state({
@@ -126,6 +171,9 @@ export const game = $state({
   missions: pickRandomCities(8),
   // The city of the mission currently being played (set by startLevel).
   missionCity: '',
+  // Difficulty multiplier of the current mission (Scene scales enemy stats by
+  // this; 1 = baseline). Set by startLevel from the missions table.
+  missionPower: 1,
   x: 0,
   z: 0,
   heading: 0,
@@ -153,8 +201,8 @@ export const game = $state({
   // Set by Board once cells are computed.
   totalTiles: 0,
 
-  // --- Enemy vessels (seeded from config; rebuilt by respawnEnemies) ---
-  enemies: makeEnemies(),
+  // --- Enemy vessels (roster for the current mission; rebuilt by respawnEnemies) ---
+  enemies: makeEnemiesForMission(1),
   // Bumped by respawnEnemies so Scene rebuilds each enemy's live mover
   // (position/state) from the fresh list.
   enemiesEpoch: 0,
@@ -238,15 +286,17 @@ export function healSub(amount: number) {
 // Rebuild the enemy roster from config (fresh full HP at their spawn tiles,
 // dead ones revived). Bumps enemiesEpoch so Scene resets their live movers.
 export function respawnEnemies() {
-  game.enemies = makeEnemies();
+  game.enemies = makeEnemiesForMission(game.level);
   game.enemiesEpoch++;
   closeEnemyMenu();
 }
 
-// Enter a mission's arena from the picker: fresh sub, fresh enemy roster.
+// Enter a mission's arena from the picker: fresh sub, fresh roster for that
+// mission's difficulty (types/counts + power).
 export function startLevel(n: number) {
   game.level = n;
   game.missionCity = game.missions[n - 1] ?? '';
+  game.missionPower = MISSIONS[Math.min(MISSIONS.length, Math.max(1, n)) - 1].power;
   resetGame();
   respawnEnemies();
   game.screen = 'play';
