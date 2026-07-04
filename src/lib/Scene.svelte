@@ -1,5 +1,7 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core';
+  import { interactivity } from '@threlte/extras';
+  import { Vector3 } from 'three';
   import type {
     DirectionalLight as ThreeDirLight,
     OrthographicCamera as ThreeOrthoCam,
@@ -13,7 +15,10 @@
   import Cargo from './Cargo.svelte';
   import Tanker from './Tanker.svelte';
   import { axialToWorld, worldToAxial, axialRound } from './hex';
-  import { game, toggleSubmerged, markCurrentTile } from './game.svelte';
+  import { game, toggleSubmerged, markCurrentTile, selectEnemy } from './game.svelte';
+
+  // Enables Threlte pointer picking so the enemy meshes' onclick fires.
+  interactivity();
 
   // Size of each hex in world units. Bigger TILE_SIZE → bigger tiles AND a
   // bigger submarine (SUB_SCALE tracks it), and — because the arena's world
@@ -271,6 +276,37 @@
   // Fixed ambient current direction (world-space): foam streaks drift
   // toward the lower-left of the iso view, independent of the sub's heading.
   const CURRENT = axialToWorld(1, -1, TILE_SIZE);
+
+  // World positions of the enemies (for rendering + their status rings).
+  const enemyRender = $derived(
+    game.enemies.map((e) => {
+      const w = axialToWorld(e.q, e.r, TILE_SIZE);
+      return { e, x: w.x, z: w.z };
+    })
+  );
+
+  // Project the selected enemy's world position to screen space so the HTML
+  // context menu (in +page.svelte) can anchor to it. The camera is static, so
+  // this only needs recomputing when the selection changes or on resize.
+  const projScratch = new Vector3();
+  $effect(() => {
+    const c = cam;
+    const id = game.selectedEnemyId;
+    if (!c || !id) return;
+    const e = game.enemies.find((x) => x.id === id);
+    if (!e) return;
+    const update = () => {
+      const w = axialToWorld(e.q, e.r, TILE_SIZE);
+      c.updateMatrixWorld(true);
+      c.matrixWorldInverse.copy(c.matrixWorld).invert();
+      projScratch.set(w.x, 0, w.z).project(c);
+      game.menuSx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
+      game.menuSy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  });
 </script>
 
 <T.OrthographicCamera
@@ -323,8 +359,24 @@
   scale={SUB_SCALE}
 />
 
-<!-- Enemy vessels — static display for now, one of each type -->
-<Warship    q={6}  r={-4} tileSize={TILE_SIZE} scale={SUB_SCALE} />
-<Cargo      q={-5} r={4}  tileSize={TILE_SIZE} scale={SUB_SCALE} />
-<Tanker     q={0}  r={8}  tileSize={TILE_SIZE} scale={SUB_SCALE} />
-<SubmarineIX q={-4} r={-6} tileSize={TILE_SIZE} scale={SUB_SCALE} />
+<!-- Enemy vessels — click one to open its context menu (activate/deactivate).
+     Each sits inside a status ring: gold when selected, green when active,
+     gray when inactive. -->
+{#each enemyRender as { e, x, z } (e.id)}
+  {@const ringColor =
+    e.id === game.selectedEnemyId ? '#ffd700' : e.active ? '#4ade80' : '#5b6b7a'}
+  <T.Mesh position={[x, 0.44, z]} rotation={[-Math.PI / 2, 0, 0]}>
+    <T.RingGeometry args={[1.15, 1.5, 32]} />
+    <T.MeshBasicMaterial color={ringColor} transparent opacity={0.85} depthWrite={false} />
+  </T.Mesh>
+
+  {#if e.type === 'warship'}
+    <Warship q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+  {:else if e.type === 'cargo'}
+    <Cargo q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+  {:else if e.type === 'tanker'}
+    <Tanker q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+  {:else if e.type === 'submarineIx'}
+    <SubmarineIX q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+  {/if}
+{/each}
