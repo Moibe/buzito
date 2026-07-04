@@ -146,6 +146,12 @@
     <span class="win-title">🎉 ¡Felicitaciones!</span>
     <span class="win-sub">Misión {game.missionCity} completada</span>
   </div>
+  <!-- Continue button below the banner: back to the picker for the next city. -->
+  <div class="win-cta">
+    <button onclick={goToLevelSelect}>
+      {campaignDone ? '🏆 Campaña completada — Ver misiones' : '✈ Volar a la siguiente misión'}
+    </button>
+  </div>
 {/if}
 
 <!-- Game over overlay. -->
@@ -870,6 +876,35 @@
       opacity: 1;
       transform: translate(-50%, 0);
     }
+  }
+
+  /* Continue-to-next-mission button, just below the win banner. */
+  .win-cta {
+    position: fixed;
+    top: 108px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 25;
+    animation: winpop 0.5s ease-out;
+  }
+  .win-cta button {
+    background: rgba(255, 215, 0, 0.92);
+    color: #12224a;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    font: 800 15px/1 system-ui, sans-serif;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4), 0 0 22px rgba(255, 215, 0, 0.4);
+    transition: background 0.15s, transform 0.1s;
+  }
+  .win-cta button:hover {
+    background: #ffe033;
+    transform: translateY(-2px);
+  }
+  .win-cta button:active {
+    transform: translateY(0);
   }
 
   /* Red vignette flash when the sub takes a hit. */
