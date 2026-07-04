@@ -152,12 +152,12 @@
     <!-- Submerged silhouette: the shark body as a translucent dark shape. -->
     <T.Mesh scale={[0.3, 0.18, 1.0]} renderOrder={2} onclick={handleClick}>
       <T.SphereGeometry args={[1, 16, 12]} />
-      <T.MeshBasicMaterial color="#0a2030" transparent opacity={0.4} depthWrite={false} />
+      <T.MeshBasicMaterial color="#5a6570" transparent opacity={0.45} depthWrite={false} />
     </T.Mesh>
     <!-- Dorsal fin silhouette (the tell that pokes near the surface). -->
     <T.Mesh position={[0, 0.16, -0.05]} rotation={[0, 0, -0.35]} scale={[0.18, 1, 1]} renderOrder={2}>
       <T.ConeGeometry args={[0.17, 0.34, 3]} />
-      <T.MeshBasicMaterial color="#0a2030" transparent opacity={0.4} depthWrite={false} />
+      <T.MeshBasicMaterial color="#5a6570" transparent opacity={0.45} depthWrite={false} />
     </T.Mesh>
     <T.InstancedMesh
       bind:ref={bubbleMeshRef}
