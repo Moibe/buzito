@@ -494,7 +494,6 @@
   const bomberId = game.enemies.find((e) => e.type === 'bomber')?.id;
   // Salvo interval / size / bomb damage / blast radius live in
   // config.enemies.bomber (tunable). The rest are structural.
-  const BOMB_SPREAD = 3.6; // scatter radius of targets around the sub
   const BOMB_FLIGHT = 1.35; // seconds per arc
   const BOMB_LAUNCH_Y = 0.7; // launch height (bomber deck)
   const BOMB_ARC_H = 2.6; // parabola peak height above the straight line
@@ -524,9 +523,9 @@
     for (let i = 0; i < n; i++) {
       const b = bombs.find((x) => !x.active);
       if (!b) break;
-      const ang = Math.random() * Math.PI * 2;
-      const rad = Math.random() * BOMB_SPREAD;
-      const p = clampToArena(game.x + Math.cos(ang) * rad, game.z + Math.sin(ang) * rad);
+      // Each bomb targets an independent RANDOM point in the arena (not the
+      // sub) — so a salvo scatters over 5 distinct spots.
+      const p = randomArenaPoint();
       b.active = true;
       b.sx = sx;
       b.sy = BOMB_LAUNCH_Y;
