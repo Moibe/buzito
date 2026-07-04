@@ -22,6 +22,7 @@
     markCurrentTile,
     selectEnemy,
     damageSub,
+    RAM_DAMAGE,
     type EnemyType,
     type Tracer,
   } from './game.svelte';
@@ -433,6 +434,14 @@
     }
   });
 
+  // --- Ramming ---
+  // Any enemy hull passing over the SURFACED sub deals its class ram damage
+  // (hexa-turnos ramDamage). Per-enemy cooldown so a sustained overlap chips
+  // in pulses instead of once per frame.
+  const RAM_RADIUS = 1.4; // world units, center-to-center
+  const RAM_COOLDOWN = 1.0; // seconds between hits from the same vessel
+  const ramCooldowns: Record<string, number> = {};
+
   // Distance in hex "cuadros" between two world points.
   function hexDistTiles(ax: number, az: number, bx: number, bz: number) {
     const a = worldToAxial(ax, az, TILE_SIZE);
@@ -554,6 +563,23 @@
       game.hitFlash = Math.max(0, game.hitFlash - delta * 5);
     }
 
+    // --- Ramming: any enemy hull over the surfaced sub deals ram damage ---
+    for (const e of game.enemies) {
+      const cd = ramCooldowns[e.id] ?? 0;
+      if (cd > 0) {
+        ramCooldowns[e.id] = cd - delta;
+        continue;
+      }
+      if (game.submerged || game.gameOver) continue;
+      const p = enemyPos(e);
+      const dx = p.x - game.x;
+      const dz = p.z - game.z;
+      if (dx * dx + dz * dz < RAM_RADIUS * RAM_RADIUS) {
+        damageSub(RAM_DAMAGE[e.type], `Te embistió el ${e.name}.`);
+        ramCooldowns[e.id] = RAM_COOLDOWN;
+      }
+    }
+
     // --- Advance tracers ---
     for (const t of tracers) {
       if (!t.active) continue;
@@ -567,7 +593,7 @@
         const ddz = t.z - game.z;
         if (ddx * ddx + ddz * ddz < TRACER_HIT_R2) {
           t.active = false;
-          damageSub(TRACER_DAMAGE);
+          damageSub(TRACER_DAMAGE, 'Las metralletas del destructor acabaron con tu casco.');
         }
       }
     }

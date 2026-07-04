@@ -28,6 +28,15 @@ export type Enemy = {
 // machinery, just hull points, damage and game over.
 export const SUB_HP_MAX = 50;
 
+// Ramming damage per enemy class — hexa-turnos' ramDamage values (mass +
+// danger: a laden tanker is catastrophic, a destroyer is a glancing blow).
+export const RAM_DAMAGE: Record<EnemyType, number> = {
+  warship: 8,
+  cargo: 18,
+  tanker: 25,
+  submarineIx: 16,
+};
+
 export const game = $state({
   x: 0,
   z: 0,
@@ -37,6 +46,8 @@ export const game = $state({
   // Hull points. Machine-gun tracers chip away at this while surfaced.
   hp: SUB_HP_MAX,
   gameOver: false,
+  // What sank the sub — shown on the game-over card.
+  deathCause: '',
   // Transient red vignette on hit (set to 1 on damage, decayed per-frame by
   // Scene, rendered as an overlay by the HUD).
   hitFlash: 0,
@@ -101,12 +112,16 @@ export function toggleEnemyActive(id: string) {
 }
 
 // Apply damage to the submarine's hull (hexa-turnos hp model). Clamps at 0
-// and flips game over; further damage is ignored once sunk.
-export function damageSub(amount: number) {
+// and flips game over; further damage is ignored once sunk. `cause` is the
+// message shown on the game-over card if this hit is the killing blow.
+export function damageSub(amount: number, cause = 'Tu casco no aguantó.') {
   if (game.gameOver) return;
   game.hp = Math.max(0, game.hp - amount);
   game.hitFlash = 1;
-  if (game.hp <= 0) game.gameOver = true;
+  if (game.hp <= 0) {
+    game.gameOver = true;
+    game.deathCause = cause;
+  }
 }
 
 // Restart after sinking: fresh hull, back to the arena center, progress
@@ -114,6 +129,7 @@ export function damageSub(amount: number) {
 export function resetGame() {
   game.hp = SUB_HP_MAX;
   game.gameOver = false;
+  game.deathCause = '';
   game.hitFlash = 0;
   game.x = 0;
   game.z = 0;

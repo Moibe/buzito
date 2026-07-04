@@ -74,7 +74,7 @@
   <div class="gameover">
     <div class="gameover-card">
       <h1>¡Hundido!</h1>
-      <p>Las metralletas del destructor acabaron con tu casco.</p>
+      <p>{game.deathCause || 'Tu casco no aguantó.'}</p>
       <button onclick={resetGame}>Reintentar</button>
     </div>
   </div>
