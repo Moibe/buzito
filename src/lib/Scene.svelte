@@ -89,9 +89,12 @@
   const FRAME_U = ARENA_HALF_U + HEX_BLEED + 0.15 - FRAME_HALF_THICKNESS;
   const FRAME_V = ARENA_HALF_V + HEX_BLEED + 0.15 - FRAME_HALF_THICKNESS;
 
-  // How far inside the tile rect the hull center is kept, so the (larger)
-  // hull never rides over the frame or off the tiles.
-  const EDGE_MARGIN = 1.5;
+  // How far inside the tile rect the sub's CENTER is kept. It must be small
+  // enough that the sub can still snap onto the OUTERMOST tiles — otherwise a
+  // ring of edge cells is unreachable (at 1.5, 6/363 tiles couldn't be covered;
+  // anything ≤ ~1.1 reaches them all). 0.8 clears every tile with margin, and
+  // the hull (tip ~0.65 past center) still stops far short of the frame (~21.3).
+  const EDGE_MARGIN = 0.8;
   // Small gap kept between the frame and the screen edge so the whole box
   // is always visible.
   const FIT_MARGIN = 0.96;
