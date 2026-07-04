@@ -348,6 +348,7 @@
     depthTimer: number; // seconds until the next depth flip (U-boat / shark)
     roamTimer: number; // seconds of idle left before the next roam (bomber)
     torpedoTimer: number; // seconds until the next torpedo (shark, while down)
+    aimHeading: number; // rotation.y the submerged shark turns toward (fires along its bow)
   };
   // Depth-segment duration for a diving type (U-boat or shark).
   function randDepthTime(type: EnemyType) {
@@ -371,6 +372,7 @@
       depthTimer: randDepthTime(e.type),
       roamTimer: ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN),
       torpedoTimer: config.enemies.shark.torpedoInterval,
+      aimHeading: Math.random() * Math.PI * 2,
     };
   }
   const movers = $state<Record<string, Mover>>(
@@ -589,16 +591,16 @@
   const torpedoes = $state<Torpedo[]>(
     Array.from({ length: 16 }, () => ({ active: false, x: 0, z: 0, vx: 0, vz: 0 }))
   );
-  function launchTorpedo(x: number, z: number) {
+  const TORPEDO_LAUNCH_OFFSET = 1.3; // emerge from the shark's bow, not its center
+  function launchTorpedo(x: number, z: number, dirX: number, dirZ: number) {
     const t = torpedoes.find((p) => !p.active);
     if (!t) return;
-    const ang = Math.random() * Math.PI * 2;
     const spd = config.enemies.shark.torpedoSpeed;
     t.active = true;
-    t.x = x;
-    t.z = z;
-    t.vx = Math.cos(ang) * spd;
-    t.vz = Math.sin(ang) * spd;
+    t.x = x + dirX * TORPEDO_LAUNCH_OFFSET;
+    t.z = z + dirZ * TORPEDO_LAUNCH_OFFSET;
+    t.vx = dirX * spd;
+    t.vz = dirZ * spd;
   }
 
   // --- Health pickups ---
@@ -705,6 +707,16 @@
             m.roamTimer = ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN);
           }
         }
+      } else if (e.type === 'shark' && e.active && m.submerged) {
+        // Submerged shark: turn toward a random bearing and prowl forward, so
+        // its torpedoes always leave the BOW (fired below along m.heading).
+        th = m.aimHeading;
+        const fwdX = -Math.sin(m.heading);
+        const fwdZ = -Math.cos(m.heading);
+        const p = clampToArena(m.x + fwdX * spd * 0.7 * delta, m.z + fwdZ * spd * 0.7 * delta);
+        m.x = p.x;
+        m.z = p.z;
+        m.moving = true;
       } else if (e.active && cfg.behavior === 'roam') {
         // Erratic wander: hold still, then occasionally creep to a random
         // spot (and sometimes just stay put another stretch). Actual motion
@@ -774,11 +786,15 @@
         }
       }
 
-      // Shark: while submerged, fire torpedoes in random directions.
+      // Shark: while submerged, fire a torpedo out its BOW, then pick a new
+      // bearing to turn toward for the next shot (varies direction over time).
       if (e.type === 'shark' && e.active && m.submerged && !game.gameOver) {
         m.torpedoTimer -= delta;
         if (m.torpedoTimer <= 0) {
-          launchTorpedo(m.x, m.z);
+          const fwdX = -Math.sin(m.heading);
+          const fwdZ = -Math.cos(m.heading);
+          launchTorpedo(m.x, m.z, fwdX, fwdZ);
+          m.aimHeading = Math.random() * Math.PI * 2;
           // floor guard: a 0 typed in the panel would otherwise fire every frame
           m.torpedoTimer = Math.max(0.1, config.enemies.shark.torpedoInterval);
         }
