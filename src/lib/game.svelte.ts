@@ -38,6 +38,9 @@ export type Enemy = {
 export const config = $state({
   sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
   pickup: { heal: 12, respawn: 180 },
+  // Shiny asterisk power-ups: collecting one "liberates" (marks visited) every
+  // tile along its horizontal, vertical and both diagonal lines on screen.
+  stars: { count: 3, respawn: 25 },
   // --- Player sub upgrades/abilities (the LEFT tuning panel binds to this).
   // Each has an `enabled` toggle so they can be switched on/off to test. ---
   player: {

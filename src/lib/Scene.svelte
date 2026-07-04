@@ -18,8 +18,9 @@
   import Shark from './Shark.svelte';
   import Minelayer from './Minelayer.svelte';
   import Mine from './Mine.svelte';
+  import Star from './Star.svelte';
   import Tracers from './Tracers.svelte';
-  import { axialToWorld, worldToAxial, axialRound } from './hex';
+  import { axialToWorld, worldToAxial, axialRound, buildBoardIsoRect } from './hex';
   import {
     game,
     toggleSubmerged,
@@ -433,8 +434,11 @@
       for (const e of game.enemies) {
         if (DYNAMIC.has(e.type)) movers[e.id] = newMover(e);
       }
-      // A regenerated roster starts on a clean board — wipe the old minefield.
+      // A regenerated roster starts on a clean board — wipe the old minefield
+      // and stars (they respawn fresh next frame).
       for (const mn of mines) mn.active = false;
+      for (const s of stars) s.active = false;
+      starRespawnTimer = 0;
     });
   });
 
@@ -727,6 +731,76 @@
     }
   }
 
+  // --- Star power-ups (liberate the asterisk of lines) ---
+  // Valid tile keys of the board (same cells as Board.svelte builds) — so
+  // liberateAsterisk only ever marks REAL tiles and visitedCount stays honest.
+  const boardKeys = new Set(
+    buildBoardIsoRect(ARENA_HALF_U, ARENA_HALF_V, TILE_SIZE, 7, 0.4).map((c) => `${c.q},${c.r}`)
+  );
+  const STAR_RADIUS2 = 1.1 * 1.1; // collect radius (XZ), any depth
+  type Star = { active: boolean; x: number; z: number };
+  const stars = $state<Star[]>(
+    Array.from({ length: 8 }, () => ({ active: false, x: 0, z: 0 }))
+  );
+  let starRespawnTimer = 0;
+
+  // Spawn config.stars.count stars on random tile centers; deactivate the rest.
+  function spawnStars() {
+    const count = Math.max(0, Math.min(stars.length, Math.round(config.stars.count)));
+    for (let i = 0; i < stars.length; i++) {
+      if (i < count) {
+        const p = randomArenaPoint();
+        const raw = worldToAxial(p.x, p.z, TILE_SIZE);
+        const a = axialRound(raw.q, raw.r);
+        const w = axialToWorld(a.q, a.r, TILE_SIZE);
+        stars[i].active = true;
+        stars[i].x = w.x;
+        stars[i].z = w.z;
+      } else {
+        stars[i].active = false;
+      }
+    }
+  }
+
+  // Mark VISITED every real tile along the star's 4 screen lines (the asterisk):
+  // horizontal (const v), vertical (const u) and both diagonals (world x / z).
+  // Walk each of the 8 rays step by step from the star, snapping to the nearest
+  // hex, so the lines are contiguous with no gaps.
+  const ASTERISK_DIRS: [number, number][] = [
+    [1, -1], [-1, 1], // screen horizontal (const v)
+    [1, 1], [-1, -1], // screen vertical (const u)
+    [1, 0], [-1, 0], // screen diagonal (world x-axis)
+    [0, 1], [0, -1], // screen diagonal (world z-axis)
+  ];
+  function markTileAt(wx: number, wz: number) {
+    const raw = worldToAxial(wx, wz, TILE_SIZE);
+    const a = axialRound(raw.q, raw.r);
+    const key = `${a.q},${a.r}`;
+    if (boardKeys.has(key) && !game.visited.has(key)) {
+      game.visited.add(key);
+      game.visitedCount++;
+    }
+  }
+  function liberateAsterisk(sx: number, sz: number) {
+    const S = Math.SQRT1_2;
+    const step = TILE_SIZE * 0.3;
+    const reach = (ARENA_HALF_U + ARENA_HALF_V) * 2;
+    markTileAt(sx, sz);
+    for (const [dx, dz] of ASTERISK_DIRS) {
+      const len = Math.hypot(dx, dz);
+      const nx = dx / len;
+      const nz = dz / len;
+      for (let t = step; t <= reach; t += step) {
+        const wx = sx + nx * t;
+        const wz = sz + nz * t;
+        const u = (wx - wz) * S;
+        const v = (wx + wz) * S;
+        if (Math.abs(u) > ARENA_HALF_U || Math.abs(v) > ARENA_HALF_V) break;
+        markTileAt(wx, wz);
+      }
+    }
+  }
+
   // On revive, clear in-flight bombs / explosions from the previous life so a
   // stale bomb can't blast the freshly reset hull (same rationale as tracers).
   // Also reset pickups so a fresh trio spawns next frame.
@@ -740,6 +814,8 @@
       bombTimer = untrack(() => config.enemies.bomber.salvoMin);
       for (const p of pickups) p.active = false;
       pickupRespawnTimer = 0;
+      for (const s of stars) s.active = false;
+      starRespawnTimer = 0;
     }
   });
 
@@ -1214,6 +1290,28 @@
       if (pickupRespawnTimer <= 0) spawnPickups();
     }
 
+    // --- Star power-ups: collect on proximity (any depth) → liberate the
+    // asterisk of lines; respawn the set a while after it's cleared. ---
+    if (stars.some((s) => s.active)) {
+      if (!game.gameOver) {
+        for (const s of stars) {
+          if (!s.active) continue;
+          const dx = s.x - game.x;
+          const dz = s.z - game.z;
+          if (dx * dx + dz * dz < STAR_RADIUS2) {
+            s.active = false;
+            liberateAsterisk(s.x, s.z);
+            spawnBlastVisual(s.x, s.z);
+            game.healFlash = Math.max(game.healFlash, 0.6); // brief golden-ish flash
+          }
+        }
+        if (!stars.some((s) => s.active)) starRespawnTimer = config.stars.respawn;
+      }
+    } else if (!game.gameOver) {
+      starRespawnTimer -= delta;
+      if (starRespawnTimer <= 0) spawnStars();
+    }
+
     // --- Project every enemy to screen space so its HTML health bar can
     // follow it (camera is static, enemies move → reproject each frame). ---
     if (cam) {
@@ -1501,6 +1599,14 @@
         <T.MeshBasicMaterial color="#5fe8ff" transparent opacity={0.6} depthWrite={false} toneMapped={false} />
       </T.Mesh>
     {/if}
+  {/if}
+{/each}
+
+<!-- Star power-ups: shiny golden asterisks. Collect one to liberate every tile
+     on its horizontal, vertical and diagonal lines. -->
+{#each stars as s}
+  {#if s.active}
+    <Star x={s.x} z={s.z} scale={SUB_SCALE} />
   {/if}
 {/each}
 
