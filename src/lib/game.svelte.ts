@@ -115,6 +115,12 @@ export function toggleEnemyActive(id: string) {
   if (e) e.active = !e.active;
 }
 
+// TEMP (debug): freeze all enemies if any is active, else reactivate them all.
+export function toggleAllEnemies() {
+  const anyActive = game.enemies.some((e) => e.active);
+  for (const e of game.enemies) e.active = !anyActive;
+}
+
 // Apply damage to the submarine's hull (hexa-turnos hp model). Clamps at 0
 // and flips game over; further damage is ignored once sunk. `cause` is the
 // message shown on the game-over card if this hit is the killing blow.

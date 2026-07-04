@@ -6,10 +6,13 @@
     SUB_HP_MAX,
     closeEnemyMenu,
     toggleEnemyActive,
+    toggleAllEnemies,
     resetGame,
   } from '$lib/game.svelte';
 
   const hpPct = $derived((game.hp / SUB_HP_MAX) * 100);
+  // TEMP (debug): whether any enemy is currently active.
+  const enemiesActive = $derived(game.enemies.some((e) => e.active));
 
   // The enemy whose context menu is open (null = no menu).
   const selectedEnemy = $derived(
@@ -36,6 +39,10 @@
     (seleccionado + clic en el mar: mover)
   </div>
   <div class="progress">{game.visitedCount} / {game.totalTiles}</div>
+  <!-- TEMP (debug): freeze / reactivate all enemies at once. -->
+  <button class="debug-btn" onclick={toggleAllEnemies}>
+    {enemiesActive ? '⏸ Detener enemigos' : '▶ Reactivar enemigos'}
+  </button>
 </div>
 
 <!-- Submarine stats panel (top-left) — hull bar, hexa-turnos ShipStats style. -->
@@ -144,6 +151,28 @@
     font: 700 15px/1 system-ui, sans-serif;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     letter-spacing: 0.03em;
+  }
+
+  /* TEMP (debug) button — distinct violet chrome so it reads as a scaffold
+     control, not part of the real HUD. */
+  .debug-btn {
+    background: rgba(60, 20, 70, 0.72);
+    color: #e9b8ff;
+    border: 1px dashed rgba(200, 130, 240, 0.7);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font: 600 13px/1 system-ui, sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .debug-btn:hover {
+    background: rgba(80, 28, 92, 0.9);
+    border-color: rgba(220, 160, 255, 1);
+  }
+  .debug-btn:active {
+    transform: translateY(1px);
   }
 
   /* Enemy context menu (main card + submenu) — gold theme, same chrome as
