@@ -1,3 +1,5 @@
+import { pickRandomCities } from './cities';
+
 export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark' | 'minelayer';
 
 // A machine-gun tracer round (pooled; physics driven by Scene, drawn by
@@ -110,10 +112,15 @@ function makeEnemies(): Enemy[] {
 }
 
 export const game = $state({
-  // Which screen is showing: the level picker or the arena.
+  // Which screen is showing: the mission picker or the arena.
   screen: 'select' as 'select' | 'play',
-  // Currently selected level (1-8). Cosmetic for now — all lead to the arena.
+  // Currently selected mission slot (1-8). Cosmetic for now — all lead to arena.
   level: 1,
+  // The 8 missions: random cities drawn from the world's 100 largest. Picked
+  // once at load; reshuffleMissions() draws a fresh set.
+  missions: pickRandomCities(8),
+  // The city of the mission currently being played (set by startLevel).
+  missionCity: '',
   // Current stage within the level (1..STAGE_COUNT). Clear a stage by
   // submerging over the coverage target of tiles.
   stage: 1,
@@ -232,12 +239,18 @@ export function respawnEnemies() {
   closeEnemyMenu();
 }
 
-// Enter a level's arena from the picker: fresh sub, fresh enemy roster.
+// Enter a mission's arena from the picker: fresh sub, fresh enemy roster.
 export function startLevel(n: number) {
   game.level = n;
+  game.missionCity = game.missions[n - 1] ?? '';
   resetGame();
   respawnEnemies();
   game.screen = 'play';
+}
+
+// Draw a fresh random set of 8 mission cities (only meaningful on the picker).
+export function reshuffleMissions() {
+  game.missions = pickRandomCities(8);
 }
 
 // Back out of the arena to the level picker.

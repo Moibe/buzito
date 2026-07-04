@@ -11,6 +11,7 @@
     resetGame,
     startLevel,
     goToLevelSelect,
+    reshuffleMissions,
   } from '$lib/game.svelte';
 
   const hpPct = $derived((game.hp / config.sub.hp) * 100);
@@ -37,12 +38,16 @@
   <!-- Level picker: 8 numbered tiles (4 top, 4 bottom). Click one → its arena. -->
   <div class="levelselect">
     <h1 class="ls-title">buzito</h1>
-    <p class="ls-sub">Selecciona un nivel</p>
+    <p class="ls-sub">Elige tu misión</p>
     <div class="ls-grid">
-      {#each Array.from({ length: 8 }) as _, i}
-        <button class="ls-tile" onclick={() => startLevel(i + 1)}>{i + 1}</button>
+      {#each game.missions as city, i}
+        <button class="ls-tile" onclick={() => startLevel(i + 1)}>
+          <span class="ls-tile-num">{i + 1}</span>
+          <span class="ls-tile-city">{city}</span>
+        </button>
       {/each}
     </div>
+    <button class="ls-reroll" onclick={reshuffleMissions}>🎲 Otras ciudades</button>
   </div>
 {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -58,7 +63,7 @@
     (seleccionado + clic en el mar: mover)
   </div>
   <div class="progress">{game.visitedCount} / {game.totalTiles}</div>
-  <button class="level-btn" onclick={goToLevelSelect}>◄ Nivel {game.level}</button>
+  <button class="level-btn" onclick={goToLevelSelect}>◄ {game.missionCity || 'Misiones'}</button>
   <!-- TEMP (debug): freeze / reactivate all enemies at once. -->
   <button class="debug-btn" onclick={toggleAllEnemies}>
     {enemiesActive ? '⏸ Detener enemigos' : '▶ Reactivar enemigos'}
@@ -326,21 +331,33 @@
     gap: 18px;
   }
   .ls-tile {
-    width: 108px;
-    height: 108px;
+    width: 120px;
+    height: 120px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 8px;
+    padding: 8px;
     background: rgba(10, 25, 40, 0.72);
     color: #ffd700;
     border: 2px solid rgba(255, 215, 0, 0.55);
     border-radius: 12px;
-    font: 800 40px/1 system-ui, sans-serif;
     cursor: pointer;
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     transition: transform 0.12s, background 0.15s, border-color 0.15s;
+  }
+  .ls-tile-num {
+    font: 800 16px/1 system-ui, sans-serif;
+    color: rgba(255, 215, 0, 0.5);
+  }
+  .ls-tile-city {
+    font: 700 16px/1.15 system-ui, sans-serif;
+    text-align: center;
+    word-break: break-word;
+    letter-spacing: 0.01em;
   }
   .ls-tile:hover {
     background: rgba(20, 45, 68, 0.92);
@@ -349,6 +366,23 @@
   }
   .ls-tile:active {
     transform: translateY(0);
+  }
+  .ls-reroll {
+    margin-top: 26px;
+    background: rgba(10, 20, 30, 0.65);
+    color: #ffd700;
+    border: 1px solid rgba(255, 215, 0, 0.6);
+    border-radius: 8px;
+    padding: 10px 18px;
+    font: 600 14px/1 system-ui, sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .ls-reroll:hover {
+    background: rgba(20, 45, 68, 0.9);
+    border-color: rgba(255, 215, 0, 1);
   }
 
   /* "Back to levels" button in the arena HUD. */
