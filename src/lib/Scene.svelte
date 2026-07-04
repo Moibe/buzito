@@ -16,6 +16,8 @@
   import Cargo from './Cargo.svelte';
   import Bomber from './Bomber.svelte';
   import Shark from './Shark.svelte';
+  import Minelayer from './Minelayer.svelte';
+  import Mine from './Mine.svelte';
   import Tracers from './Tracers.svelte';
   import { axialToWorld, worldToAxial, axialRound } from './hex';
   import {
@@ -315,6 +317,8 @@
     // The bomber creeps to random spots and sits idle for long stretches.
     bomber: { behavior: 'roam', margin: 2.5, rotLerp: 3 },
     shark: { behavior: 'patrol', margin: 2.0, rotLerp: 6 },
+    // Small ship that patrols a line, laying mines along its path.
+    minelayer: { behavior: 'patrol', margin: 2.0, rotLerp: 6 },
   };
   // Enemy types that dive/surface at random (and stay hidden as translucent
   // silhouettes while down).
@@ -349,6 +353,7 @@
     roamTimer: number; // seconds of idle left before the next roam (bomber)
     torpedoTimer: number; // seconds until the next torpedo (shark, while down)
     aimHeading: number; // rotation.y the submerged shark turns toward (fires along its bow)
+    mineTimer: number; // seconds until the next mine dropped (minelayer)
   };
   // Depth-segment duration for a diving type (U-boat or shark).
   function randDepthTime(type: EnemyType) {
@@ -373,6 +378,7 @@
       roamTimer: ROAM_IDLE_MIN + Math.random() * (ROAM_IDLE_MAX - ROAM_IDLE_MIN),
       torpedoTimer: config.enemies.shark.torpedoInterval,
       aimHeading: Math.random() * Math.PI * 2,
+      mineTimer: config.enemies.minelayer.dropInterval,
     };
   }
   const movers = $state<Record<string, Mover>>(
@@ -391,6 +397,8 @@
       for (const e of game.enemies) {
         if (DYNAMIC.has(e.type)) movers[e.id] = newMover(e);
       }
+      // A regenerated roster starts on a clean board — wipe the old minefield.
+      for (const mn of mines) mn.active = false;
     });
   });
 
@@ -603,6 +611,32 @@
     t.vz = dirZ * spd;
   }
 
+  // --- Minelayer mines ---
+  // Floating contact mines dropped by the minelayer. They sit where dropped and
+  // detonate on contact with the sub at ANY depth (above or below). The pool is
+  // sized with headroom; the live cap is config.enemies.minelayer.maxMines.
+  const MINE_HIT_R2 = 0.85 * 0.85;
+  type Mine = { active: boolean; x: number; z: number };
+  const mines = $state<Mine[]>(
+    Array.from({ length: 16 }, () => ({ active: false, x: 0, z: 0 }))
+  );
+  function activeMineCount() {
+    let n = 0;
+    for (const m of mines) if (m.active) n++;
+    return n;
+  }
+  // Drop a mine at (x, z) unless the arena is already at the cap. Returns
+  // whether one was actually laid.
+  function dropMine(x: number, z: number) {
+    if (activeMineCount() >= config.enemies.minelayer.maxMines) return false;
+    const m = mines.find((p) => !p.active);
+    if (!m) return false;
+    m.active = true;
+    m.x = x;
+    m.z = z;
+    return true;
+  }
+
   // --- Health pickups ---
   // Three blue orbs (each randomly submerged or surfaced) appear on the board;
   // touching one AT THE SAME DEPTH heals the sub. Once all three are taken, a
@@ -635,6 +669,7 @@
     if (!game.gameOver) {
       for (const b of bombs) b.active = false;
       for (const bl of blasts) bl.active = false;
+      for (const mn of mines) mn.active = false;
       // untrack: reading config here must NOT subscribe this revive effect to
       // the bomber knob (editing it live would otherwise wipe bombs + pickups).
       bombTimer = untrack(() => config.enemies.bomber.salvoMin);
@@ -801,6 +836,19 @@
       } else if (e.type === 'shark') {
         // Don't let the timer run down while surfaced; fire soon after diving.
         m.torpedoTimer = Math.min(m.torpedoTimer, config.enemies.shark.torpedoInterval);
+      }
+
+      // Minelayer: drop a floating mine on an interval, capped at maxMines.
+      if (e.type === 'minelayer' && e.active && !game.gameOver) {
+        m.mineTimer -= delta;
+        if (m.mineTimer <= 0) {
+          if (dropMine(m.x, m.z)) {
+            // floor guard: a 0 typed in the panel would otherwise drop every frame
+            m.mineTimer = Math.max(0.1, config.enemies.minelayer.dropInterval);
+          } else {
+            m.mineTimer = 0; // at the cap — retry next frame once a slot frees
+          }
+        }
       }
     }
 
@@ -969,6 +1017,22 @@
         if (dx * dx + dz * dz < TORPEDO_HIT_R2) {
           t.active = false;
           damageSub(config.enemies.shark.torpedoDamage, 'Un torpedo del Tiburón te alcanzó.');
+        }
+      }
+    }
+
+    // --- Mines: floating contact hazards. Detonate on contact with the sub at
+    // ANY depth (above or below), damaging it and clearing that mine (which
+    // frees a slot for the minelayer to lay another). ---
+    if (!game.gameOver) {
+      for (const mn of mines) {
+        if (!mn.active) continue;
+        const dx = mn.x - game.x;
+        const dz = mn.z - game.z;
+        if (dx * dx + dz * dz < MINE_HIT_R2) {
+          mn.active = false;
+          spawnBlastVisual(mn.x, mn.z);
+          damageSub(config.enemies.minelayer.mineDamage, 'Chocaste con una mina.');
         }
       }
     }
@@ -1144,6 +1208,23 @@
       scale={SUB_SCALE}
       onclick={() => selectEnemy(e.id)}
     />
+  {:else if e.type === 'minelayer'}
+    {@const m = movers[e.id]}
+    <Minelayer
+      x={m.x}
+      z={m.z}
+      heading={m.heading}
+      moving={m.moving}
+      scale={SUB_SCALE}
+      onclick={() => selectEnemy(e.id)}
+    />
+  {/if}
+{/each}
+
+<!-- Floating contact mines laid by the Minelayer (harm the sub at any depth). -->
+{#each mines as mn}
+  {#if mn.active}
+    <Mine x={mn.x} z={mn.z} scale={SUB_SCALE} />
   {/if}
 {/each}
 

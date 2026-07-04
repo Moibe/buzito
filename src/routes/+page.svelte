@@ -153,6 +153,14 @@
       <label class="knob"><span>Daño torpedo</span><input type="number" step="1" min="0" bind:value={config.enemies.shark.torpedoDamage} /></label>
       <label class="knob"><span>Vel. torpedo</span><input type="number" step="0.5" min="1" bind:value={config.enemies.shark.torpedoSpeed} /></label>
 
+      <div class="cfg-sec">Minador</div>
+      <label class="knob"><span>Casco</span><input type="number" step="5" min="1" bind:value={config.enemies.minelayer.hp} /></label>
+      <label class="knob"><span>Embestida</span><input type="number" step="1" min="0" bind:value={config.enemies.minelayer.ram} /></label>
+      <label class="knob"><span>Velocidad</span><input type="number" step="0.1" min="0" bind:value={config.enemies.minelayer.speed} /></label>
+      <label class="knob"><span>Mina cada (s)</span><input type="number" step="0.5" min="0.3" bind:value={config.enemies.minelayer.dropInterval} /></label>
+      <label class="knob"><span>Daño mina</span><input type="number" step="1" min="0" bind:value={config.enemies.minelayer.mineDamage} /></label>
+      <label class="knob"><span>Máx. minas</span><input type="number" step="1" min="1" max="16" bind:value={config.enemies.minelayer.maxMines} /></label>
+
       <div class="cfg-sec">Esferas de vida</div>
       <label class="knob"><span>Curación</span><input type="number" step="1" min="0" bind:value={config.pickup.heal} /></label>
       <label class="knob"><span>Reaparición (s)</span><input type="number" step="10" min="5" bind:value={config.pickup.respawn} /></label>

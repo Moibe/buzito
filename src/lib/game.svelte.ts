@@ -1,4 +1,4 @@
-export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark';
+export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark' | 'minelayer';
 
 // A machine-gun tracer round (pooled; physics driven by Scene, drawn by
 // Tracers.svelte). y is a fixed gun height; velocity is world XZ.
@@ -66,6 +66,15 @@ export const config = $state({
       torpedoDamage: 15,
       torpedoSpeed: 4.5,
     },
+    // Small ship that lays floating contact mines (harm at any depth).
+    minelayer: {
+      hp: 45,
+      ram: 10,
+      speed: 2.4,
+      dropInterval: 2.5, // seconds between mines dropped
+      mineDamage: 18,
+      maxMines: 9, // never more than this many mines in the arena at once
+    },
   },
 });
 
@@ -77,6 +86,7 @@ const SPAWN_DEFS: { id: string; type: EnemyType; name: string; q: number; r: num
   { id: 'bomber-1', type: 'bomber', name: 'Bombardero', q: 2, r: 2 },
   { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3 },
   { id: 'shark-1', type: 'shark', name: 'Tiburón', q: 0, r: -6 },
+  { id: 'minelayer-1', type: 'minelayer', name: 'Minador', q: -2, r: 5 },
 ];
 
 function makeEnemies(): Enemy[] {
