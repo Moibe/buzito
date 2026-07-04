@@ -373,9 +373,11 @@
     return { x: (cu + cv) * Math.SQRT1_2, z: (cv - cu) * Math.SQRT1_2 };
   }
 
-  // Sea click while in Move mode → relocate the selected vehicle to the click.
+  // With an enemy selected, a click on empty sea relocates it there (test
+  // convenience — clicking another vehicle re-selects it instead, since its
+  // own onclick fires first and stops this handler).
   function onGroundClick(ev: { point: Vector3; stopPropagation?: () => void }) {
-    if (!game.moveMode || !game.selectedEnemyId) return;
+    if (!game.selectedEnemyId) return;
     ev.stopPropagation?.();
     const e = game.enemies.find((x) => x.id === game.selectedEnemyId);
     if (!e) return;
@@ -389,7 +391,6 @@
       e.q = a.q;
       e.r = a.r;
     }
-    game.moveMode = false;
   }
 
   // --- Destroyer guns ---

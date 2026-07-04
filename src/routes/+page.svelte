@@ -8,8 +8,6 @@
     markCurrentTile,
     closeEnemyMenu,
     toggleEnemyActive,
-    startMove,
-    cancelMove,
     resetGame,
   } from '$lib/game.svelte';
 
@@ -27,11 +25,9 @@
   );
 
   function onSceneContextMenu(e: MouseEvent) {
-    // Right-click: cancel move mode if active, otherwise close the menu.
-    // Always suppress the browser's context menu.
+    // Right-click closes the menu (and suppresses the browser's own).
     e.preventDefault();
-    if (game.moveMode) cancelMove();
-    else closeEnemyMenu();
+    closeEnemyMenu();
   }
 </script>
 
@@ -45,6 +41,7 @@
 <div class="hud">
   <div class="hint">
     ← → girar · ↑ ↓ avanzar / reversa · Espacio: sumergir · clic en un enemigo: menú
+    (seleccionado + clic en el mar: mover)
   </div>
   <div class="progress">{game.visitedCount} / {game.totalTiles}</div>
   <button class="dive-btn" class:submerged={game.submerged} onclick={onDiveClick}>
@@ -83,14 +80,13 @@
 <!-- Enemy context menu — main card + Acción submenu, anchored to the selected
      enemy's projected screen position (computed in Scene). Hidden while in
      Move mode (the board is being used to pick the destination). -->
-{#if selectedEnemy && !game.moveMode}
+{#if selectedEnemy}
   <div
     class="ctx-menu"
     style="left: {game.menuSx + 24}px; top: {game.menuSy - 30}px;"
     role="menu"
   >
     <div class="ctx-title">{selectedEnemy.name}</div>
-    <button onclick={startMove}>Mover</button>
     <button class:active={game.menuMode === 'action'} onclick={() => (game.menuMode = 'action')}>
       Acción ▸
     </button>
@@ -108,14 +104,6 @@
       <button class="back" onclick={() => (game.menuMode = null)}>← Atrás</button>
     </div>
   {/if}
-{/if}
-
-<!-- Move-mode banner: shown while waiting for the sea click that relocates
-     the selected vehicle. -->
-{#if selectedEnemy && game.moveMode}
-  <div class="move-hint">
-    Haz clic en el mar para mover a <b>{selectedEnemy.name}</b> · clic derecho para cancelar
-  </div>
 {/if}
 
 <style>
@@ -349,26 +337,4 @@
     background: rgba(255, 215, 0, 0.28);
   }
 
-  /* Move-mode banner (top center). */
-  .move-hint {
-    position: fixed;
-    top: 18px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 25;
-    background: rgba(10, 20, 30, 0.85);
-    color: #ffd700;
-    border: 1px solid rgba(255, 215, 0, 0.6);
-    border-radius: 8px;
-    padding: 9px 16px;
-    font: 600 13px/1 system-ui, sans-serif;
-    letter-spacing: 0.02em;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    pointer-events: none;
-  }
-  .move-hint b {
-    color: #fff3b8;
-  }
 </style>

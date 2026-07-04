@@ -75,10 +75,6 @@ export const game = $state({
   // frame while a menu is open (so it follows a moving vehicle).
   menuSx: 0,
   menuSy: 0,
-  // Move mode: after picking "Mover", the next click on the sea relocates the
-  // selected vehicle. The actual placement is applied in Scene, which has the
-  // world-space click point.
-  moveMode: false,
 });
 
 export function toggleSubmerged() {
@@ -103,7 +99,6 @@ export function selectEnemy(id: string) {
 export function closeEnemyMenu() {
   game.selectedEnemyId = null;
   game.menuMode = null;
-  game.moveMode = false;
 }
 
 export function toggleEnemyActive(id: string) {
@@ -141,14 +136,3 @@ export function resetGame() {
   closeEnemyMenu();
 }
 
-// Enter move mode for the currently selected vehicle: the menu hides and the
-// next sea click (handled in Scene) relocates it.
-export function startMove() {
-  if (!game.selectedEnemyId) return;
-  game.moveMode = true;
-  game.menuMode = null;
-}
-
-export function cancelMove() {
-  game.moveMode = false;
-}
