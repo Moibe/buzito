@@ -8,6 +8,10 @@
   import Submarine from './Submarine.svelte';
   import OceanCurrents from './OceanCurrents.svelte';
   import ArenaFrame from './ArenaFrame.svelte';
+  import Warship from './Warship.svelte';
+  import SubmarineIX from './SubmarineIX.svelte';
+  import Cargo from './Cargo.svelte';
+  import Tanker from './Tanker.svelte';
   import { axialToWorld, worldToAxial, axialRound } from './hex';
   import { game, toggleSubmerged, markCurrentTile } from './game.svelte';
 
@@ -318,3 +322,9 @@
   submerged={game.submerged}
   scale={SUB_SCALE}
 />
+
+<!-- Enemy vessels — static display for now, one of each type -->
+<Warship    q={6}  r={-4} tileSize={TILE_SIZE} scale={SUB_SCALE} />
+<Cargo      q={-5} r={4}  tileSize={TILE_SIZE} scale={SUB_SCALE} />
+<Tanker     q={0}  r={8}  tileSize={TILE_SIZE} scale={SUB_SCALE} />
+<SubmarineIX q={-4} r={-6} tileSize={TILE_SIZE} scale={SUB_SCALE} />
