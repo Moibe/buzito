@@ -30,7 +30,9 @@ export const actions: Actions = {
     throw redirect(303, '/admin');
   },
   logout: async ({ cookies }) => {
+    // Clear both the current site-wide cookie and any legacy /admin-scoped one.
     cookies.delete(ADMIN_COOKIE, { path: '/' });
+    cookies.delete(ADMIN_COOKIE, { path: '/admin' });
     throw redirect(303, '/admin');
   },
 };
