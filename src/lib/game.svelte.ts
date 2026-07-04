@@ -65,7 +65,7 @@ export const game = $state({
     { id: 'warship-1', type: 'warship', name: 'Destructor', q: 6, r: -7, active: true },
     { id: 'cargo-1', type: 'cargo', name: 'Carguero', q: -5, r: 4, active: true },
     { id: 'tanker-1', type: 'tanker', name: 'Petrolero', q: 0, r: 8, active: false },
-    { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: -6, active: false },
+    { id: 'subix-1', type: 'submarineIx', name: 'U-Boot', q: -4, r: 3, active: true },
   ] as Enemy[],
   // Context-menu selection. selectedEnemyId = null → no menu open.
   // menuMode: null = main card only, 'action' = the Acción submenu is open.

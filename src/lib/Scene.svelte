@@ -290,30 +290,49 @@
   const CURRENT = axialToWorld(1, -1, TILE_SIZE);
 
   // --- Enemy motion ---
-  // DYNAMIC enemies (cargo + warship) are Scene-driven pure renderers whose
-  // continuous world position lives here. STATIC enemies (tanker,
-  // submarineIx) keep their own q/r glide driver and just mirror their live
-  // position back via onAnimate so their ring/menu track them.
-  const DYNAMIC = new Set<EnemyType>(['cargo', 'warship']);
+  // DYNAMIC enemies (cargo, warship, U-boat) are Scene-driven pure renderers
+  // whose continuous world position lives here. STATIC enemies (tanker) keep
+  // their own q/r glide driver and just mirror their live position back via
+  // onAnimate so their ring/menu track them.
+  const DYNAMIC = new Set<EnemyType>(['cargo', 'warship', 'submarineIx']);
 
+  // Patrol axis in the camera's ground frame: 'u' = left↔right (screen
+  // horizontal), 'v' = up↔down (screen depth). The U-boat patrols vertically.
   type MoverCfg = {
     patrolSpeed: number;
     moveSpeed: number;
     margin: number;
     rotLerp: number;
+    axis: 'u' | 'v';
   };
   const MOVER_CFG: Record<string, MoverCfg> = {
-    cargo: { patrolSpeed: 2.0, moveSpeed: 3.0, margin: 2.0, rotLerp: 6 },
-    warship: { patrolSpeed: 2.8, moveSpeed: 3.2, margin: 2.0, rotLerp: 6 },
+    cargo: { patrolSpeed: 2.0, moveSpeed: 3.0, margin: 2.0, rotLerp: 6, axis: 'u' },
+    warship: { patrolSpeed: 2.8, moveSpeed: 3.2, margin: 2.0, rotLerp: 6, axis: 'u' },
+    submarineIx: { patrolSpeed: 2.4, moveSpeed: 3.0, margin: 2.0, rotLerp: 5, axis: 'v' },
   };
+
+  // Resting/patrol heading for dir=+1 (the far direction along the axis) and
+  // dir=−1. Bow = local −Z → forward = (−sinθ, −cosθ).
+  //   u axis: +u dir → θ=−π/4,  −u dir → θ=3π/4
+  //   v axis: +v dir → θ=−3π/4, −v dir → θ=π/4
+  function patrolHeading(axis: 'u' | 'v', dir: number) {
+    if (axis === 'v') return dir > 0 ? (-3 * Math.PI) / 4 : Math.PI / 4;
+    return dir > 0 ? -Math.PI / 4 : (3 * Math.PI) / 4;
+  }
+
+  // The U-boat randomly alternates submerged/surfaced stretches along its run.
+  const UBOAT_SEG_MIN = 2.2; // seconds per depth segment (min)
+  const UBOAT_SEG_MAX = 5.0; // (max)
 
   type Mover = {
     x: number;
     z: number;
     heading: number;
-    dir: number; // +1 → +u (right), −1 → −u (left)
+    dir: number; // +1 / −1 along the patrol axis
     moving: boolean;
     moveTarget: { x: number; z: number } | null;
+    submerged: boolean; // only the U-boat toggles this
+    depthTimer: number; // seconds until the next depth flip (U-boat)
   };
   const movers = $state<Record<string, Mover>>(
     Object.fromEntries(
@@ -321,9 +340,19 @@
         .filter((e) => DYNAMIC.has(e.type))
         .map((e) => {
           const w = axialToWorld(e.q, e.r, TILE_SIZE);
+          const cfg = MOVER_CFG[e.type];
           return [
             e.id,
-            { x: w.x, z: w.z, heading: -Math.PI / 4, dir: 1, moving: false, moveTarget: null },
+            {
+              x: w.x,
+              z: w.z,
+              heading: patrolHeading(cfg.axis, 1),
+              dir: 1,
+              moving: false,
+              moveTarget: null,
+              submerged: false,
+              depthTimer: UBOAT_SEG_MIN + Math.random() * (UBOAT_SEG_MAX - UBOAT_SEG_MIN),
+            },
           ];
         })
     )
@@ -495,27 +524,43 @@
           m.moving = false;
         }
       } else if (e.active) {
-        // Patrol along u at the current row (v derived from live position).
-        // The u-step is the projection of the ACTUAL (lerped) heading, not
-        // m.dir directly — so after a bounce the hull decelerates, pivots at
-        // the wall, and sails back bow-first instead of sliding stern-first
-        // while the 180° turn completes.
-        const u = (m.x - m.z) * Math.SQRT1_2;
-        const v = (m.x + m.z) * Math.SQRT1_2;
-        const uLim = ARENA_HALF_U - cfg.margin;
-        const fwdU = (-Math.sin(m.heading) + Math.cos(m.heading)) * Math.SQRT1_2;
-        let nu = u + fwdU * cfg.patrolSpeed * delta;
-        if (nu > uLim) {
-          nu = uLim;
-          m.dir = -1;
-        } else if (nu < -uLim) {
-          nu = -uLim;
-          m.dir = 1;
+        // Patrol along the config axis (u = horizontal, v = vertical),
+        // bouncing at the arena edge. The step is the projection of the
+        // ACTUAL (lerped) heading, not m.dir directly — so after a bounce the
+        // hull decelerates, pivots at the wall, and sails back bow-first
+        // instead of sliding stern-first while the 180° turn completes.
+        const S = Math.SQRT1_2;
+        const u = (m.x - m.z) * S;
+        const v = (m.x + m.z) * S;
+        if (cfg.axis === 'v') {
+          const lim = ARENA_HALF_V - cfg.margin;
+          const fwd = (-Math.sin(m.heading) - Math.cos(m.heading)) * S; // dv of forward
+          let nv = v + fwd * cfg.patrolSpeed * delta;
+          if (nv > lim) {
+            nv = lim;
+            m.dir = -1;
+          } else if (nv < -lim) {
+            nv = -lim;
+            m.dir = 1;
+          }
+          m.x = (u + nv) * S;
+          m.z = (nv - u) * S;
+        } else {
+          const lim = ARENA_HALF_U - cfg.margin;
+          const fwd = (-Math.sin(m.heading) + Math.cos(m.heading)) * S; // du of forward
+          let nu = u + fwd * cfg.patrolSpeed * delta;
+          if (nu > lim) {
+            nu = lim;
+            m.dir = -1;
+          } else if (nu < -lim) {
+            nu = -lim;
+            m.dir = 1;
+          }
+          m.x = (nu + v) * S;
+          m.z = (v - nu) * S;
         }
-        m.x = (nu + v) * Math.SQRT1_2;
-        m.z = (v - nu) * Math.SQRT1_2;
         m.moving = true;
-        th = m.dir > 0 ? -Math.PI / 4 : (3 * Math.PI) / 4;
+        th = patrolHeading(cfg.axis, m.dir);
       } else {
         m.moving = false;
       }
@@ -523,6 +568,16 @@
       while (dh > Math.PI) dh -= 2 * Math.PI;
       while (dh < -Math.PI) dh += 2 * Math.PI;
       m.heading += dh * Math.min(delta * cfg.rotLerp, 1);
+
+      // U-boat only: randomly alternate submerged/surfaced stretches while
+      // active (its depth decides whether it can ram — see the ram loop).
+      if (e.type === 'submarineIx' && e.active) {
+        m.depthTimer -= delta;
+        if (m.depthTimer <= 0) {
+          m.submerged = !m.submerged;
+          m.depthTimer = UBOAT_SEG_MIN + Math.random() * (UBOAT_SEG_MAX - UBOAT_SEG_MIN);
+        }
+      }
     }
 
     // --- Destroyer guns: strafe the surfaced sub within range ---
@@ -556,14 +611,19 @@
       game.hitFlash = Math.max(0, game.hitFlash - delta * 5);
     }
 
-    // --- Ramming: any enemy hull over the surfaced sub deals ram damage ---
+    // --- Ramming: an enemy hull over the sub deals ram damage, but ONLY when
+    // both are at the SAME depth level. Surface ships (cargo/warship/tanker)
+    // are always surfaced, so they only hit a surfaced sub; the U-boat hits
+    // whenever its live depth matches the sub's (both up or both down). ---
     for (const e of game.enemies) {
       const cd = ramCooldowns[e.id] ?? 0;
       if (cd > 0) {
         ramCooldowns[e.id] = cd - delta;
         continue;
       }
-      if (game.submerged || game.gameOver) continue;
+      if (game.gameOver) continue;
+      const enemySubmerged = DYNAMIC.has(e.type) ? movers[e.id].submerged : false;
+      if (enemySubmerged !== game.submerged) continue; // different levels → pass by
       const p = enemyPos(e);
       const dx = p.x - game.x;
       const dz = p.z - game.z;
@@ -693,13 +753,15 @@
       onAnimate={(ax, az) => reportLive(e.id, ax, az)}
     />
   {:else if e.type === 'submarineIx'}
+    {@const m = movers[e.id]}
     <SubmarineIX
-      q={e.q}
-      r={e.r}
-      tileSize={TILE_SIZE}
+      x={m.x}
+      z={m.z}
+      heading={m.heading}
+      moving={m.moving}
+      submerged={m.submerged}
       scale={SUB_SCALE}
       onclick={() => selectEnemy(e.id)}
-      onAnimate={(ax, az) => reportLive(e.id, ax, az)}
     />
   {/if}
 {/each}
