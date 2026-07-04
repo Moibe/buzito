@@ -64,7 +64,7 @@ export const config = $state({
       depthMax: 4.5,
       torpedoInterval: 2.5, // seconds between torpedoes while submerged
       torpedoDamage: 15,
-      torpedoSpeed: 7,
+      torpedoSpeed: 4.5,
     },
   },
 });

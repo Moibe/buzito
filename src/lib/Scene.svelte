@@ -1142,19 +1142,19 @@
     {@const bz = -t.vz * inv}
     <T.Mesh position={[t.x, TORPEDO_Y, t.z]} rotation={[0, ang, 0]} renderOrder={3}>
       <T.BoxGeometry args={[0.15, 0.12, 0.85]} />
-      <T.MeshStandardMaterial color="#16232c" flatShading depthWrite={false} />
+      <T.MeshStandardMaterial color="#0a2030" flatShading depthWrite={false} />
     </T.Mesh>
     {#each Array.from({ length: 8 }) as _, i}
       {@const d = 0.55 + i * 0.34}
       {@const s = Math.max(0.025, 0.095 * (1 - i * 0.1))}
       <T.Mesh position={[t.x + bx * d, TORPEDO_Y + 0.02, t.z + bz * d]} renderOrder={3}>
-        <T.SphereGeometry args={[s, 8, 6]} />
         <T.MeshBasicMaterial
-          color="#bfe4f2"
+          color="#0a2030"
           transparent
           opacity={0.55 * (1 - i * 0.1)}
           depthWrite={false}
         />
+        <T.SphereGeometry args={[s, 8, 6]} />
       </T.Mesh>
     {/each}
   {/if}
