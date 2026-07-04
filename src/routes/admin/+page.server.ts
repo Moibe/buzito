@@ -1,19 +1,14 @@
 import { dev } from '$app/environment';
-import { env } from '$env/dynamic/private';
 import { fail, redirect } from '@sveltejs/kit';
 import { WORLD_CITIES } from '$lib/cities';
+import { ADMIN_COOKIE, adminPassword, isAdmin } from '$lib/server/auth';
 import type { Actions, PageServerLoad } from './$types';
 
 // Admin gate. Access is protected by a password checked SERVER-side; on success
-// an httpOnly cookie (scoped to /admin) is set, so players can't reach the data
-// without it. Set ADMIN_PASSWORD in the environment (.env / host config) — the
-// 'buzito' fallback is only for local dev; change it for anything public.
-const COOKIE = 'buzito_admin';
-const adminPassword = () => env.ADMIN_PASSWORD || 'buzito';
-
+// an httpOnly cookie (site-wide, so admin-only API writes are authorized too)
+// is set. Set ADMIN_PASSWORD in the environment; 'buzito' is only a dev default.
 export const load: PageServerLoad = ({ cookies }) => {
-  const authed = cookies.get(COOKIE) === adminPassword();
-  return authed
+  return isAdmin(cookies)
     ? { authed: true as const, cities: WORLD_CITIES }
     : { authed: false as const, cities: [] as string[] };
 };
@@ -25,8 +20,8 @@ export const actions: Actions = {
     if (password !== adminPassword()) {
       return fail(401, { error: 'Contraseña incorrecta.' });
     }
-    cookies.set(COOKIE, password, {
-      path: '/admin',
+    cookies.set(ADMIN_COOKIE, password, {
+      path: '/',
       httpOnly: true,
       sameSite: 'lax',
       secure: !dev,
@@ -35,7 +30,7 @@ export const actions: Actions = {
     throw redirect(303, '/admin');
   },
   logout: async ({ cookies }) => {
-    cookies.delete(COOKIE, { path: '/admin' });
+    cookies.delete(ADMIN_COOKIE, { path: '/' });
     throw redirect(303, '/admin');
   },
 };

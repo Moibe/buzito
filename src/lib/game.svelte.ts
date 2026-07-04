@@ -45,8 +45,8 @@ function baseMissionEnemies(): { type: EnemyType; count: number }[][] {
 
 export const config = $state({
   sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
-  // Game rules the admin edits in "Ajustes" (persisted to localStorage so the
-  // change reaches the game). winPct = fraction of tiles to cover to win.
+  // Game rules the admin edits in "Ajustes" (persisted server-side so the
+  // change reaches every player). winPct = fraction of tiles to cover to win.
   rules: { winPct: 0.9 },
   // Editable per-mission enemy composition (admin drag-to-add). Starts as the
   // base table; persisted so edits reach the game.
@@ -108,8 +108,8 @@ export const config = $state({
   },
 });
 
-// Validate a parsed mission-enemies override before trusting it (localStorage
-// could be stale/corrupt or from a different enemy set).
+// Validate a mission-enemies override before trusting it (server data could be
+// stale/corrupt or from a different enemy set).
 function isValidMissionEnemies(v: unknown): v is { type: EnemyType; count: number }[][] {
   if (!Array.isArray(v) || v.length !== MISSIONS.length) return false;
   for (const list of v) {
@@ -125,36 +125,42 @@ function isValidMissionEnemies(v: unknown): v is { type: EnemyType; count: numbe
   return true;
 }
 
-// Load persisted admin rules (client only; server has no localStorage).
-if (typeof localStorage !== 'undefined') {
-  const saved = Number(localStorage.getItem('buzito.winPct'));
-  if (saved > 0 && saved <= 1) config.rules.winPct = saved;
-  const savedME = localStorage.getItem('buzito.missionEnemies');
-  if (savedME) {
-    try {
-      const parsed = JSON.parse(savedME);
-      if (isValidMissionEnemies(parsed)) config.missionEnemies = parsed;
-    } catch {
-      /* ignore corrupt value */
-    }
+// Apply settings coming from the SERVER (the source of truth, loaded via the
+// root layout). Validated before use.
+export function applyServerSettings(
+  s: { winPct?: unknown; missionEnemies?: unknown } | null | undefined
+) {
+  if (!s) return;
+  if (typeof s.winPct === 'number' && s.winPct > 0 && s.winPct <= 1) config.rules.winPct = s.winPct;
+  if (isValidMissionEnemies(s.missionEnemies)) config.missionEnemies = s.missionEnemies;
+}
+
+// Persist the current admin-editable settings to the SERVER (fire-and-forget).
+// Only the admin ever calls the mutators below; the write endpoint is gated by
+// the admin cookie. No-op during SSR.
+async function saveSettingsToServer() {
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ winPct: config.rules.winPct, missionEnemies: config.missionEnemies }),
+    });
+  } catch {
+    /* ignore network errors */
   }
 }
 
-// Set the win-coverage rule from a PERCENTAGE (0-100), clamp, and persist it so
-// the change survives reloads and reaches the game.
+// Set the win-coverage rule from a PERCENTAGE (0-100), clamp, and persist it to
+// the server so it applies to every player.
 export function setWinPct(pct: number) {
   const v = Math.max(0.01, Math.min(1, (Number(pct) || 0) / 100));
   config.rules.winPct = v;
-  if (typeof localStorage !== 'undefined') localStorage.setItem('buzito.winPct', String(v));
+  saveSettingsToServer();
 }
 
-// --- Editable mission composition (admin drag-to-add) ---
+// --- Editable mission composition (admin drag-to-add), persisted server-side ---
 const MAX_PER_TYPE = 20;
-function persistMissionEnemies() {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('buzito.missionEnemies', JSON.stringify(config.missionEnemies));
-  }
-}
 // Add one enemy of `type` to mission index (0-based). Validates the type.
 export function addEnemyToMission(missionIndex: number, type: string) {
   const list = config.missionEnemies[missionIndex];
@@ -166,7 +172,7 @@ export function addEnemyToMission(missionIndex: number, type: string) {
   } else {
     list.push({ type: t, count: 1 });
   }
-  persistMissionEnemies();
+  saveSettingsToServer();
 }
 // Remove one enemy of `type` from mission index (drops the entry at 0).
 export function removeEnemyFromMission(missionIndex: number, type: string) {
@@ -176,12 +182,12 @@ export function removeEnemyFromMission(missionIndex: number, type: string) {
   if (idx < 0) return;
   list[idx].count--;
   if (list[idx].count <= 0) list.splice(idx, 1);
-  persistMissionEnemies();
+  saveSettingsToServer();
 }
 // Restore every mission to the base difficulty table.
 export function resetMissions() {
   config.missionEnemies = baseMissionEnemies();
-  persistMissionEnemies();
+  saveSettingsToServer();
 }
 
 // Axial hex-ring helper (pure axial coords; no tile size needed). Ring k = the
