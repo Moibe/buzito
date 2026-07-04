@@ -823,7 +823,7 @@
         }
         if (!pickups.some((p) => p.active)) pickupRespawnTimer = PICKUP_RESPAWN;
       }
-    } else {
+    } else if (!game.gameOver) {
       pickupRespawnTimer -= delta;
       if (pickupRespawnTimer <= 0) spawnPickups();
     }
