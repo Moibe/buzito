@@ -420,6 +420,19 @@
   let muzzleZ = $state(0);
   const warshipId = game.enemies.find((e) => e.type === 'warship')?.id;
 
+  // On revive (Reintentar → gameOver flips back to false), clear any rounds
+  // still in flight from the previous life: the pool is Scene-local, so
+  // resetGame() can't reach it, and a stale tracer crossing the arena center
+  // would otherwise chip the freshly reset hull. Harmless on mount (pool
+  // starts inactive).
+  $effect(() => {
+    if (!game.gameOver) {
+      for (const t of tracers) t.active = false;
+      fireCooldown = 0;
+      muzzleFlash = 0;
+    }
+  });
+
   // Distance in hex "cuadros" between two world points.
   function hexDistTiles(ax: number, az: number, bx: number, bz: number) {
     const a = worldToAxial(ax, az, TILE_SIZE);
@@ -481,10 +494,15 @@
         }
       } else if (e.active) {
         // Patrol along u at the current row (v derived from live position).
+        // The u-step is the projection of the ACTUAL (lerped) heading, not
+        // m.dir directly — so after a bounce the hull decelerates, pivots at
+        // the wall, and sails back bow-first instead of sliding stern-first
+        // while the 180° turn completes.
         const u = (m.x - m.z) * Math.SQRT1_2;
         const v = (m.x + m.z) * Math.SQRT1_2;
         const uLim = ARENA_HALF_U - cfg.margin;
-        let nu = u + m.dir * cfg.patrolSpeed * delta;
+        const fwdU = (-Math.sin(m.heading) + Math.cos(m.heading)) * Math.SQRT1_2;
+        let nu = u + fwdU * cfg.patrolSpeed * delta;
         if (nu > uLim) {
           nu = uLim;
           m.dir = -1;
