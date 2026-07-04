@@ -259,9 +259,11 @@
   useTask((delta) => {
     // A sunk sub doesn't answer the helm — controls freeze until restart.
     const alive = !game.gameOver;
-    // "Mayor velocidad" ability: multiply the base speed while enabled.
-    const subSpeed =
-      config.sub.speed * (config.player.speedBoost.enabled ? config.player.speedBoost.mult : 1);
+    // "Mayor velocidad" ability: multiply the base speed while enabled. Guard
+    // mult > 0 so an emptied/zeroed panel field (yields null) can't freeze the
+    // sub — it just falls back to the base speed until a number is typed.
+    const boost = config.player.speedBoost;
+    const subSpeed = config.sub.speed * (boost.enabled && boost.mult > 0 ? boost.mult : 1);
     if (alive && keys.left) game.heading += config.sub.turnRate * delta;
     if (alive && keys.right) game.heading -= config.sub.turnRate * delta;
 
@@ -688,6 +690,9 @@
     const mi = missiles.find((p) => !p.active);
     if (!mi) return;
     const spd = config.player.missiles.speed;
+    // Don't spawn a stationary missile if the speed field is empty/0 — it would
+    // never move, never reach the frame to expire, and clog the pool.
+    if (!(spd > 0)) return;
     const fx = -Math.sin(game.heading);
     const fz = -Math.cos(game.heading);
     mi.active = true;
