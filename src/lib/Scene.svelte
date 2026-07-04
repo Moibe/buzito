@@ -590,7 +590,9 @@
     if (!game.gameOver) {
       for (const b of bombs) b.active = false;
       for (const bl of blasts) bl.active = false;
-      bombTimer = config.enemies.bomber.salvoMin;
+      // untrack: reading config here must NOT subscribe this revive effect to
+      // the bomber knob (editing it live would otherwise wipe bombs + pickups).
+      bombTimer = untrack(() => config.enemies.bomber.salvoMin);
       for (const p of pickups) p.active = false;
       pickupRespawnTimer = 0;
     }

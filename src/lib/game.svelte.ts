@@ -74,6 +74,10 @@ function makeEnemies(): Enemy[] {
 }
 
 export const game = $state({
+  // Which screen is showing: the level picker or the arena.
+  screen: 'select' as 'select' | 'play',
+  // Currently selected level (1-8). Cosmetic for now — all lead to the arena.
+  level: 1,
   x: 0,
   z: 0,
   heading: 0,
@@ -183,6 +187,20 @@ export function respawnEnemies() {
   game.enemies = makeEnemies();
   game.enemiesEpoch++;
   closeEnemyMenu();
+}
+
+// Enter a level's arena from the picker: fresh sub, fresh enemy roster.
+export function startLevel(n: number) {
+  game.level = n;
+  resetGame();
+  respawnEnemies();
+  game.screen = 'play';
+}
+
+// Back out of the arena to the level picker.
+export function goToLevelSelect() {
+  closeEnemyMenu();
+  game.screen = 'select';
 }
 
 // Restart after sinking: fresh hull, back to the arena center, progress
