@@ -51,6 +51,8 @@ export const game = $state({
   // Transient red vignette on hit (set to 1 on damage, decayed per-frame by
   // Scene, rendered as an overlay by the HUD).
   hitFlash: 0,
+  // Transient green vignette on healing (blue-orb pickup).
+  healFlash: 0,
   // Current hex tile under the sub (updated every frame by Scene).
   currentTileQ: 0,
   currentTileR: 0,
@@ -134,6 +136,13 @@ export function damageSub(amount: number, cause = 'Tu casco no aguantó.') {
   }
 }
 
+// Heal the hull (blue-orb pickup), clamped to full. No-op once sunk.
+export function healSub(amount: number) {
+  if (game.gameOver) return;
+  game.hp = Math.min(SUB_HP_MAX, game.hp + amount);
+  game.healFlash = 1;
+}
+
 // Restart after sinking: fresh hull, back to the arena center, progress
 // cleared. Enemies keep their state (position/active) — the threat remains.
 export function resetGame() {
@@ -141,6 +150,7 @@ export function resetGame() {
   game.gameOver = false;
   game.deathCause = '';
   game.hitFlash = 0;
+  game.healFlash = 0;
   game.x = 0;
   game.z = 0;
   game.heading = 0;

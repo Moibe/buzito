@@ -22,6 +22,7 @@
     markCurrentTile,
     selectEnemy,
     damageSub,
+    healSub,
     RAM_DAMAGE,
     type EnemyType,
     type Tracer,
@@ -531,13 +532,42 @@
     }
   }
 
+  // --- Health pickups ---
+  // Three blue orbs (each randomly submerged or surfaced) appear on the board;
+  // touching one AT THE SAME DEPTH heals the sub. Once all three are taken, a
+  // 3-minute timer runs before a fresh trio appears.
+  const PICKUP_COUNT = 3;
+  const PICKUP_HEAL = 12;
+  const PICKUP_RADIUS = 1.1;
+  const PICKUP_RESPAWN = 180; // seconds (3 minutes) after clearing the trio
+  type Pickup = { active: boolean; x: number; z: number; submerged: boolean };
+  const pickups = $state<Pickup[]>(
+    Array.from({ length: PICKUP_COUNT }, () => ({ active: false, x: 0, z: 0, submerged: false }))
+  );
+  let pickupRespawnTimer = 0; // counts down while the trio is cleared
+  let pickupElapsed = 0;
+  let pickupPulse = $state(0); // shared gentle bob/scale pulse
+
+  function spawnPickups() {
+    for (const p of pickups) {
+      const pt = randomArenaPoint();
+      p.active = true;
+      p.x = pt.x;
+      p.z = pt.z;
+      p.submerged = Math.random() < 0.5;
+    }
+  }
+
   // On revive, clear in-flight bombs / explosions from the previous life so a
   // stale bomb can't blast the freshly reset hull (same rationale as tracers).
+  // Also reset pickups so a fresh trio spawns next frame.
   $effect(() => {
     if (!game.gameOver) {
       for (const b of bombs) b.active = false;
       for (const bl of blasts) bl.active = false;
       bombTimer = BOMB_INTERVAL_MIN;
+      for (const p of pickups) p.active = false;
+      pickupRespawnTimer = 0;
     }
   });
 
@@ -704,6 +734,10 @@
     if (game.hitFlash > 0) {
       game.hitFlash = Math.max(0, game.hitFlash - delta * 5);
     }
+    // Green heal-vignette fade (set to 1 by healSub).
+    if (game.healFlash > 0) {
+      game.healFlash = Math.max(0, game.healFlash - delta * 3);
+    }
 
     // --- Ramming: an enemy hull over the sub deals ram damage, but ONLY when
     // both are at the SAME depth level. Surface ships (cargo/warship/bomber)
@@ -770,6 +804,28 @@
       if (!bl.active) continue;
       bl.t += delta;
       if (bl.t >= BLAST_DUR) bl.active = false;
+    }
+
+    // --- Health pickups: collect at matching depth; respawn the trio 3 min
+    // after it's cleared. ---
+    pickupElapsed += delta;
+    pickupPulse = Math.sin(pickupElapsed * 2.2);
+    if (pickups.some((p) => p.active)) {
+      if (!game.gameOver) {
+        for (const p of pickups) {
+          if (!p.active || p.submerged !== game.submerged) continue;
+          const dx = p.x - game.x;
+          const dz = p.z - game.z;
+          if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
+            p.active = false;
+            healSub(PICKUP_HEAL);
+          }
+        }
+        if (!pickups.some((p) => p.active)) pickupRespawnTimer = PICKUP_RESPAWN;
+      }
+    } else {
+      pickupRespawnTimer -= delta;
+      if (pickupRespawnTimer <= 0) spawnPickups();
     }
 
     // --- Keep the context menu anchored to the selected enemy each frame so
@@ -915,6 +971,28 @@
     <T.Mesh position={[bl.x, SEA_Y + 0.04, bl.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[r, r, r]}>
       <T.RingGeometry args={[0.55, 1.0, 24]} />
       <T.MeshBasicMaterial color="#ffb24a" transparent opacity={(1 - p) * 0.9} depthWrite={false} toneMapped={false} />
+    </T.Mesh>
+  {/if}
+{/each}
+
+<!-- Health pickups: glowing blue orbs. Surfaced ones ride above the water,
+     submerged ones sit below the surface as translucent orbs (collect at the
+     matching depth). Gentle shared bob/scale pulse. -->
+{#each pickups as p}
+  {#if p.active}
+    {@const py = p.submerged ? 0.28 : 0.55}
+    {@const s = 0.26 * (1 + 0.12 * pickupPulse)}
+    <T.Mesh position={[p.x, py + 0.04 * pickupPulse, p.z]} scale={[s, s, s]}>
+      <T.SphereGeometry args={[1, 16, 12]} />
+      <T.MeshStandardMaterial
+        color={p.submerged ? '#2a9fd6' : '#5fe8ff'}
+        emissive={p.submerged ? '#155a72' : '#37c4e6'}
+        emissiveIntensity={0.7}
+        transparent={p.submerged}
+        opacity={p.submerged ? 0.55 : 1}
+        depthWrite={!p.submerged}
+        flatShading
+      />
     </T.Mesh>
   {/if}
 {/each}

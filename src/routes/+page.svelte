@@ -62,6 +62,11 @@
   <div class="hit-vignette" style="opacity: {game.hitFlash * 0.6}"></div>
 {/if}
 
+<!-- Green vignette flash on healing (blue-orb pickup). -->
+{#if game.healFlash > 0}
+  <div class="heal-vignette" style="opacity: {game.healFlash * 0.5}"></div>
+{/if}
+
 <!-- Game over overlay. -->
 {#if game.gameOver}
   <div class="gameover">
@@ -295,6 +300,13 @@
     z-index: 18;
     pointer-events: none;
     box-shadow: inset 0 0 120px 40px rgba(200, 30, 30, 0.75);
+  }
+  .heal-vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 18;
+    pointer-events: none;
+    box-shadow: inset 0 0 120px 40px rgba(40, 200, 120, 0.7);
   }
 
   /* Game over overlay. */
