@@ -300,18 +300,20 @@
   // behavior: 'patrol' = bounce back and forth along an axis (u=horizontal,
   // v=vertical). 'roam' = slow, erratic wander with long pauses (the bomber).
   // Structural movement config (speed is tunable — comes from config.enemies).
+  // The patrol AXIS is NOT fixed per type: each line-mover is randomly assigned
+  // horizontal (u) or vertical (v) when its mover is created (i.e. at match
+  // start), and keeps it for the whole match.
   type MoverCfg = {
     behavior: 'patrol' | 'roam';
     margin: number;
     rotLerp: number;
-    axis: 'u' | 'v';
   };
   const MOVER_CFG: Record<string, MoverCfg> = {
-    cargo: { behavior: 'patrol', margin: 2.0, rotLerp: 6, axis: 'u' },
-    warship: { behavior: 'patrol', margin: 2.0, rotLerp: 6, axis: 'u' },
-    submarineIx: { behavior: 'patrol', margin: 2.0, rotLerp: 5, axis: 'v' },
+    cargo: { behavior: 'patrol', margin: 2.0, rotLerp: 6 },
+    warship: { behavior: 'patrol', margin: 2.0, rotLerp: 6 },
+    submarineIx: { behavior: 'patrol', margin: 2.0, rotLerp: 5 },
     // The bomber creeps to random spots and sits idle for long stretches.
-    bomber: { behavior: 'roam', margin: 2.5, rotLerp: 3, axis: 'u' },
+    bomber: { behavior: 'roam', margin: 2.5, rotLerp: 3 },
   };
   const DYNAMIC = new Set<EnemyType>(Object.keys(MOVER_CFG) as EnemyType[]);
   // How long the bomber sits still between roams (random per idle).
@@ -333,6 +335,7 @@
   type Mover = {
     x: number;
     z: number;
+    axis: 'u' | 'v'; // this match's patrol axis (random per line-mover)
     heading: number;
     dir: number; // +1 / −1 along the patrol axis
     moving: boolean;
@@ -347,11 +350,14 @@
   }
   function newMover(e: Enemy): Mover {
     const w = axialToWorld(e.q, e.r, TILE_SIZE);
-    const cfg = MOVER_CFG[e.type];
+    // Random patrol axis for this match (line-movers only; unused for the
+    // roaming bomber).
+    const axis: 'u' | 'v' = Math.random() < 0.5 ? 'u' : 'v';
     return {
       x: w.x,
       z: w.z,
-      heading: patrolHeading(cfg.axis, 1),
+      axis,
+      heading: patrolHeading(axis, 1),
       dir: 1,
       moving: false,
       moveTarget: null,
@@ -692,7 +698,7 @@
         const S = Math.SQRT1_2;
         const u = (m.x - m.z) * S;
         const v = (m.x + m.z) * S;
-        if (cfg.axis === 'v') {
+        if (m.axis === 'v') {
           const lim = ARENA_HALF_V - cfg.margin;
           const fwd = (-Math.sin(m.heading) - Math.cos(m.heading)) * S; // dv of forward
           let nv = v + fwd * spd * delta;
@@ -720,7 +726,7 @@
           m.z = (v - nu) * S;
         }
         m.moving = true;
-        th = patrolHeading(cfg.axis, m.dir);
+        th = patrolHeading(m.axis, m.dir);
       } else {
         m.moving = false;
       }
