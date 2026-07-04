@@ -354,7 +354,27 @@
     torpedoTimer: number; // seconds until the next torpedo (shark, while down)
     aimHeading: number; // rotation.y the submerged shark turns toward (fires along its bow)
     mineTimer: number; // seconds until the next mine dropped (minelayer)
+    // Minelayer patrol line: a unit travel direction in the u/v frame (any
+    // orientation — horizontal, vertical or diagonal), reflected off the walls.
+    lineU: number;
+    lineV: number;
+    minesLaid: number; // mines dropped on the CURRENT line so far
   };
+  // A random straight-line orientation for the minelayer, as a unit direction
+  // in the camera-aligned u/v frame: horizontal (u), vertical (v), or one of
+  // the two diagonals (world-x / world-z). Random travel sign.
+  function randomLine() {
+    const S = Math.SQRT1_2;
+    const dirs = [
+      { u: 1, v: 0 }, // horizontal on screen
+      { u: 0, v: 1 }, // vertical on screen
+      { u: S, v: S }, // diagonal (along world x)
+      { u: S, v: -S }, // diagonal (along world z)
+    ];
+    const d = dirs[Math.floor(Math.random() * dirs.length)];
+    const sign = Math.random() < 0.5 ? 1 : -1;
+    return { u: d.u * sign, v: d.v * sign };
+  }
   // Depth-segment duration for a diving type (U-boat or shark).
   function randDepthTime(type: EnemyType) {
     const c = type === 'shark' ? config.enemies.shark : config.enemies.submarineIx;
@@ -365,6 +385,7 @@
     // Random patrol axis for this match (line-movers only; unused for the
     // roaming bomber).
     const axis: 'u' | 'v' = Math.random() < 0.5 ? 'u' : 'v';
+    const line = randomLine();
     return {
       x: w.x,
       z: w.z,
@@ -379,6 +400,9 @@
       torpedoTimer: config.enemies.shark.torpedoInterval,
       aimHeading: Math.random() * Math.PI * 2,
       mineTimer: config.enemies.minelayer.dropInterval,
+      lineU: line.u,
+      lineV: line.v,
+      minesLaid: 0,
     };
   }
   const movers = $state<Record<string, Mover>>(
@@ -752,6 +776,40 @@
         m.x = p.x;
         m.z = p.z;
         m.moving = true;
+      } else if (e.type === 'minelayer' && e.active) {
+        // Minelayer: sail a straight line of ANY orientation (H / V / diagonal),
+        // reflecting off the arena walls, laying mines along it. It keeps working
+        // this line until it has laid its full capacity (see the drop block
+        // below), then picks a fresh random line.
+        const S = Math.SQRT1_2;
+        const uLim = ARENA_HALF_U - cfg.margin;
+        const vLim = ARENA_HALF_V - cfg.margin;
+        let u = (m.x - m.z) * S;
+        let v = (m.x + m.z) * S;
+        u += m.lineU * spd * delta;
+        v += m.lineV * spd * delta;
+        // Reflect at the walls (flip the component's sign) so it bounces along.
+        if (u > uLim) {
+          u = uLim;
+          m.lineU = -Math.abs(m.lineU);
+        } else if (u < -uLim) {
+          u = -uLim;
+          m.lineU = Math.abs(m.lineU);
+        }
+        if (v > vLim) {
+          v = vLim;
+          m.lineV = -Math.abs(m.lineV);
+        } else if (v < -vLim) {
+          v = -vLim;
+          m.lineV = Math.abs(m.lineV);
+        }
+        m.x = (u + v) * S;
+        m.z = (v - u) * S;
+        m.moving = true;
+        // Face travel direction: world vel = ((du+dv)/√2, (dv−du)/√2), bow = −Z.
+        const vx = (m.lineU + m.lineV) * S;
+        const vz = (m.lineV - m.lineU) * S;
+        th = Math.atan2(-vx, -vz);
       } else if (e.active && cfg.behavior === 'roam') {
         // Erratic wander: hold still, then occasionally creep to a random
         // spot (and sometimes just stay put another stretch). Actual motion
@@ -839,14 +897,25 @@
       }
 
       // Minelayer: drop a floating mine on an interval, capped at maxMines.
+      // It stays on its current line until it has laid a FULL complement
+      // (maxMines) there — i.e. exhausted its laying capacity — then swings onto
+      // a fresh random line. While at the arena cap (no free slot) it just keeps
+      // re-covering the same line, waiting for the sub to detonate one.
       if (e.type === 'minelayer' && e.active && !game.gameOver) {
         m.mineTimer -= delta;
         if (m.mineTimer <= 0) {
           if (dropMine(m.x, m.z)) {
+            m.minesLaid++;
             // floor guard: a 0 typed in the panel would otherwise drop every frame
             m.mineTimer = Math.max(0.1, config.enemies.minelayer.dropInterval);
+            if (m.minesLaid >= config.enemies.minelayer.maxMines) {
+              const ln = randomLine();
+              m.lineU = ln.u;
+              m.lineV = ln.v;
+              m.minesLaid = 0;
+            }
           } else {
-            m.mineTimer = 0; // at the cap — retry next frame once a slot frees
+            m.mineTimer = 0; // at the cap — keep re-covering this line, wait for a slot
           }
         }
       }
