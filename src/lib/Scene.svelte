@@ -796,8 +796,6 @@
   const boardKeys = new Set(
     buildBoardIsoRect(ARENA_HALF_U, ARENA_HALF_V, TILE_SIZE, 7, 0.4).map((c) => `${c.q},${c.r}`)
   );
-  // Coverage fraction that wins the mission (then the rest is auto-liberated).
-  const WIN_PCT = 0.95;
   const STAR_RADIUS2 = 1.1 * 1.1; // collect radius (XZ), any depth
   type Star = { active: boolean; x: number; z: number };
   const stars = $state<Star[]>(
@@ -1497,14 +1495,14 @@
       if (linestarRespawnTimer <= 0) spawnLineStars();
     }
 
-    // --- Win: at WIN_PCT coverage the mission is complete — liberate every
+    // --- Win: at config.rules.winPct coverage the mission is complete — liberate every
     // remaining tile and raise the "Felicitaciones" banner (the sub is made
     // invincible in damageSub once won). ---
     if (
       !game.won &&
       !game.gameOver &&
       game.totalTiles > 0 &&
-      game.visitedCount / game.totalTiles >= WIN_PCT
+      game.visitedCount / game.totalTiles >= config.rules.winPct
     ) {
       for (const key of boardKeys) {
         if (!game.visited.has(key)) {

@@ -39,6 +39,9 @@ export type Enemy = {
 // apply to enemies on the next "Regenerar enemigos" (respawnEnemies). ---
 export const config = $state({
   sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
+  // Game rules the admin edits in "Ajustes" (persisted to localStorage so the
+  // change reaches the game). winPct = fraction of tiles to cover to win.
+  rules: { winPct: 0.9 },
   pickup: { heal: 12, respawn: 180 },
   // Shiny asterisk power-ups: collecting one "liberates" (marks visited) every
   // tile along its horizontal, vertical and both diagonal lines on screen.
@@ -95,6 +98,20 @@ export const config = $state({
     },
   },
 });
+
+// Load persisted admin rules (client only; server has no localStorage).
+if (typeof localStorage !== 'undefined') {
+  const saved = Number(localStorage.getItem('buzito.winPct'));
+  if (saved > 0 && saved <= 1) config.rules.winPct = saved;
+}
+
+// Set the win-coverage rule from a PERCENTAGE (0-100), clamp, and persist it so
+// the change survives reloads and reaches the game.
+export function setWinPct(pct: number) {
+  const v = Math.max(0.01, Math.min(1, (Number(pct) || 0) / 100));
+  config.rules.winPct = v;
+  if (typeof localStorage !== 'undefined') localStorage.setItem('buzito.winPct', String(v));
+}
 
 // Axial hex-ring helper (pure axial coords; no tile size needed). Ring k = the
 // 6k tiles at hex-distance k from the center.

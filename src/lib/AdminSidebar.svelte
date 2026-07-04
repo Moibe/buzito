@@ -66,6 +66,17 @@
       <button
         type="button"
         class="nav-item"
+        class:active={current === 'ajustes'}
+        onclick={() => onNavigate?.('ajustes')}
+      >
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
+        </svg>
+        <span>Ajustes</span>
+      </button>
+      <button
+        type="button"
+        class="nav-item"
         class:active={current === 'ciudades'}
         onclick={() => onNavigate?.('ciudades')}
       >
@@ -85,13 +96,6 @@
         </svg>
         <span>Misiones</span>
       </button>
-      <span class="nav-item soon">
-        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
-        </svg>
-        <span>Ajustes</span>
-        <em>pronto</em>
-      </span>
     </nav>
 
     <div class="sidebar-footer">
@@ -218,27 +222,6 @@
     background: rgba(37, 99, 235, 0.22);
     border-color: rgba(37, 99, 235, 0.5);
     box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18) inset;
-  }
-
-  .nav-item.soon {
-    color: rgba(255, 255, 255, 0.45);
-    cursor: default;
-    text-shadow: none;
-  }
-  .nav-item.soon:hover {
-    background: transparent;
-    border-color: transparent;
-  }
-  .nav-item.soon em {
-    margin-left: auto;
-    font-style: normal;
-    font-size: 0.62rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 999px;
-    padding: 1px 7px;
   }
 
   .sidebar-footer {

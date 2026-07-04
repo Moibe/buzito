@@ -3,12 +3,13 @@
   import AdminSidebar from '$lib/AdminSidebar.svelte';
   import { MISSIONS, ENEMY_INFO } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
+  import { config, setWinPct } from '$lib/game.svelte';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   let collapsed = $state(false);
-  let section = $state<'ciudades' | 'misiones'>('ciudades');
+  let section = $state<'ajustes' | 'ciudades' | 'misiones'>('ajustes');
 
   // View Transitions to animate the collapse when supported.
   function withTransition(fn: () => void) {
@@ -52,7 +53,31 @@
   <AdminSidebar {collapsed} {toggleCollapsed} current={section} onNavigate={(s) => (section = s as typeof section)} />
   <main class="work glass" class:collapsed>
     <div class="work-scroll">
-      {#if section === 'ciudades'}
+      {#if section === 'ajustes'}
+        <header class="work-head">
+          <h2>Ajustes</h2>
+          <p>Reglas del juego. Se guardan y aplican a las partidas.</p>
+        </header>
+        <div class="settings">
+          <div class="setting">
+            <div class="setting-label">
+              <strong>Cobertura para ganar</strong>
+              <span>% de mosaicos a cubrir para completar la misión.</span>
+            </div>
+            <div class="setting-input">
+              <input
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                value={Math.round(config.rules.winPct * 100)}
+                onchange={(e) => setWinPct(Number(e.currentTarget.value))}
+              />
+              <span class="unit">%</span>
+            </div>
+          </div>
+        </div>
+      {:else if section === 'ciudades'}
         <header class="work-head">
           <h2>Ciudades <span class="count">{data.cities.length}</span></h2>
           <p>Pool maestro de ciudades. Cada partida elige 8 al azar como misiones.</p>
@@ -285,6 +310,61 @@
     font-size: 15px;
     border-radius: 2px;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  }
+
+  /* --- Settings (Ajustes) --- */
+  .settings {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 520px;
+  }
+  .setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .setting-label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .setting-label strong {
+    font-size: 14px;
+    color: #fff;
+  }
+  .setting-label span {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  .setting-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .setting-input input {
+    width: 72px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    padding: 9px 10px;
+    color: #fff;
+    font: 700 15px/1 system-ui, sans-serif;
+    text-align: right;
+  }
+  .setting-input input:focus {
+    outline: none;
+    border-color: #ffd700;
+  }
+  .setting-input .unit {
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 700;
   }
 
   /* --- Missions --- */
