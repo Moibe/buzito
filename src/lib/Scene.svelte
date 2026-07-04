@@ -277,7 +277,8 @@
   // toward the lower-left of the iso view, independent of the sub's heading.
   const CURRENT = axialToWorld(1, -1, TILE_SIZE);
 
-  // World positions of the enemies (for rendering + their status rings).
+  // World positions of the STATIC enemies (for rendering + their status
+  // rings). The cargo is dynamic — see its live cargoX/cargoZ below.
   const enemyRender = $derived(
     game.enemies.map((e) => {
       const w = axialToWorld(e.q, e.r, TILE_SIZE);
@@ -285,27 +286,74 @@
     })
   );
 
-  // Project the selected enemy's world position to screen space so the HTML
-  // context menu (in +page.svelte) can anchor to it. The camera is static, so
-  // this only needs recomputing when the selection changes or on resize.
+  // --- Cargo enemy: patrols left↔right (the screen u axis), bouncing at the
+  // edges. It only patrols while ACTIVE (toggle it from its context menu). ---
+  const cargoSpawn = (() => {
+    const c = game.enemies.find((e) => e.type === 'cargo');
+    return c ? axialToWorld(c.q, c.r, TILE_SIZE) : { x: 0, z: 0 };
+  })();
+  // The cargo moves only along u (screen-right); its v (screen-depth row) is
+  // fixed at its spawn.
+  const CARGO_V = (cargoSpawn.x + cargoSpawn.z) * Math.SQRT1_2;
+  const CARGO_SPEED = 2.0; // world units/s
+  const CARGO_MARGIN = 2.0; // bounce this far in from the arena edge
+  const CARGO_ROT_LERP = 6; // how fast it swings around at a wall
+  let cargoU = $state((cargoSpawn.x - cargoSpawn.z) * Math.SQRT1_2);
+  let cargoDir = 1; // +1 → +u (right), −1 → −u (left)
+  let cargoHeading = $state(-Math.PI / 4); // faces +u
+  let cargoMoving = $state(false);
+  const cargoX = $derived((cargoU + CARGO_V) * Math.SQRT1_2);
+  const cargoZ = $derived((CARGO_V - cargoU) * Math.SQRT1_2);
+
+  // Enemy AI + keep the open context menu anchored to the selected enemy
+  // (follows the cargo as it moves).
   const projScratch = new Vector3();
-  $effect(() => {
+  useTask((delta) => {
+    // Cargo patrol.
+    const cargo = game.enemies.find((e) => e.type === 'cargo');
+    const patrolling = cargo?.active ?? false;
+    if (patrolling) {
+      const uLim = ARENA_HALF_U - CARGO_MARGIN;
+      let u = cargoU + cargoDir * CARGO_SPEED * delta;
+      if (u > uLim) {
+        u = uLim;
+        cargoDir = -1;
+      } else if (u < -uLim) {
+        u = -uLim;
+        cargoDir = 1;
+      }
+      cargoU = u;
+    }
+    cargoMoving = patrolling;
+    // Swing smoothly to face the travel direction instead of snapping 180°.
+    const targetHeading = cargoDir > 0 ? -Math.PI / 4 : (3 * Math.PI) / 4;
+    let diff = targetHeading - cargoHeading;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    cargoHeading += diff * Math.min(delta * CARGO_ROT_LERP, 1);
+
+    // Anchor the context menu to the selected enemy's LIVE screen position.
     const c = cam;
     const id = game.selectedEnemyId;
-    if (!c || !id) return;
-    const e = game.enemies.find((x) => x.id === id);
-    if (!e) return;
-    const update = () => {
-      const w = axialToWorld(e.q, e.r, TILE_SIZE);
-      c.updateMatrixWorld(true);
-      c.matrixWorldInverse.copy(c.matrixWorld).invert();
-      projScratch.set(w.x, 0, w.z).project(c);
-      game.menuSx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
-      game.menuSy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
-    };
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    if (c && id) {
+      const e = game.enemies.find((x) => x.id === id);
+      if (e) {
+        let wx: number, wz: number;
+        if (e.type === 'cargo') {
+          wx = cargoX;
+          wz = cargoZ;
+        } else {
+          const w = axialToWorld(e.q, e.r, TILE_SIZE);
+          wx = w.x;
+          wz = w.z;
+        }
+        c.updateMatrixWorld(true);
+        c.matrixWorldInverse.copy(c.matrixWorld).invert();
+        projScratch.set(wx, 0, wz).project(c);
+        game.menuSx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
+        game.menuSy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
+      }
+    }
   });
 </script>
 
@@ -363,9 +411,12 @@
      Each sits inside a status ring: gold when selected, green when active,
      gray when inactive. -->
 {#each enemyRender as { e, x, z } (e.id)}
+  {@const isCargo = e.type === 'cargo'}
+  {@const rx = isCargo ? cargoX : x}
+  {@const rz = isCargo ? cargoZ : z}
   {@const ringColor =
     e.id === game.selectedEnemyId ? '#ffd700' : e.active ? '#4ade80' : '#5b6b7a'}
-  <T.Mesh position={[x, 0.44, z]} rotation={[-Math.PI / 2, 0, 0]}>
+  <T.Mesh position={[rx, 0.44, rz]} rotation={[-Math.PI / 2, 0, 0]}>
     <T.RingGeometry args={[1.15, 1.5, 32]} />
     <T.MeshBasicMaterial color={ringColor} transparent opacity={0.85} depthWrite={false} />
   </T.Mesh>
@@ -373,7 +424,7 @@
   {#if e.type === 'warship'}
     <Warship q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
   {:else if e.type === 'cargo'}
-    <Cargo q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
+    <Cargo x={cargoX} z={cargoZ} heading={cargoHeading} moving={cargoMoving} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
   {:else if e.type === 'tanker'}
     <Tanker q={e.q} r={e.r} tileSize={TILE_SIZE} scale={SUB_SCALE} onclick={() => selectEnemy(e.id)} />
   {:else if e.type === 'submarineIx'}
