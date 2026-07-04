@@ -175,6 +175,9 @@ export const game = $state({
   // Cities already beaten (by name). length = how many levels are cleared, so
   // the NEXT pick is played at level (completed.length + 1).
   completed: [] as string[],
+  // True once the player has entered any mission — locks the city reshuffle so
+  // an in-progress campaign can't be reset out from under itself.
+  campaignStarted: false,
   // The city of the mission currently being played (set by startMission).
   missionCity: '',
   // Difficulty multiplier of the current mission (Scene scales enemy stats by
@@ -303,6 +306,7 @@ export function respawnEnemies() {
 export function startMission(city: string) {
   const level = Math.min(MISSIONS.length, game.completed.length + 1);
   game.level = level;
+  game.campaignStarted = true;
   game.missionCity = city;
   game.missionPower = MISSIONS[level - 1].power;
   resetGame();
@@ -323,6 +327,7 @@ export function markMissionWon() {
 export function reshuffleMissions() {
   game.missions = pickRandomCities(8);
   game.completed = [];
+  game.campaignStarted = false;
 }
 
 // Back out of the arena to the level picker.

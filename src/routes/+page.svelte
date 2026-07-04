@@ -79,7 +79,9 @@
         </button>
       {/each}
     </div>
-    <button class="ls-reroll" onclick={reshuffleMissions}>🎲 Otras ciudades (reinicia)</button>
+    {#if !game.campaignStarted || campaignDone}
+      <button class="ls-reroll" onclick={reshuffleMissions}>🎲 Otras ciudades (reinicia)</button>
+    {/if}
   </div>
 {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
