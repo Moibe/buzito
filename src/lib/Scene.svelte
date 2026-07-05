@@ -100,6 +100,11 @@
   // Must sit BELOW the lowest tile top: tops bob 0.4 ± wave(0.06) = 0.34..0.46,
   // so a plane above 0.34 pokes through the wave troughs (image bleeds in bands).
   const ARENA_IMG_Y = 0.28;
+  // Image extent: kept INSIDE the tile coverage (a hair under ARENA_HALF) so at
+  // the start every part of the image sits under a tile — nothing peeks out
+  // around the edges. (The plane must not reach the frame, or its border shows.)
+  const ARENA_IMG_HALF_U = ARENA_HALF_U - 1;
+  const ARENA_IMG_HALF_V = ARENA_HALF_V - 1;
   let arenaTex = $state.raw<ThreeTexture | undefined>(undefined);
   $effect(() => {
     const n = game.missionCityN;
@@ -123,7 +128,7 @@
           // arena and crop the overflow — no stretching, whatever size uploaded.
           const img = tex.image as { width: number; height: number };
           const imgAspect = img.width / img.height;
-          const planeAspect = FRAME_U / FRAME_V; // ~1 (arena is square in u/v)
+          const planeAspect = ARENA_IMG_HALF_U / ARENA_IMG_HALF_V; // ~1 (square)
           tex.center.set(0.5, 0.5);
           if (imgAspect > planeAspect) {
             tex.repeat.set(planeAspect / imgAspect, 1); // wide image → crop sides
@@ -1633,7 +1638,7 @@
 {#if arenaTex}
   <T.Group rotation={[0, Math.PI / 4, 0]}>
     <T.Mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, ARENA_IMG_Y, 0]}>
-      <T.PlaneGeometry args={[2 * FRAME_U, 2 * FRAME_V]} />
+      <T.PlaneGeometry args={[2 * ARENA_IMG_HALF_U, 2 * ARENA_IMG_HALF_V]} />
       <T.MeshBasicMaterial map={arenaTex} side={DoubleSide} toneMapped={false} />
     </T.Mesh>
   </T.Group>
