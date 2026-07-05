@@ -374,6 +374,10 @@
           window.innerHeight / (2 * FIT_HALF_V)
         );
       c.updateProjectionMatrix();
+      // Publish the left margin (empty strip beside the centered board) so the
+      // HUD can dock its side panel there.
+      const boardW = 2 * FIT_HALF_H * c.zoom;
+      game.boardLeftPx = Math.max(0, (window.innerWidth - boardW) / 2);
     };
     fit();
     window.addEventListener('resize', fit);

@@ -550,6 +550,9 @@ export const game = $state({
   visitedCount: 0,
   // Set by Board once cells are computed.
   totalTiles: 0,
+  // Width (px) of the empty margin to the LEFT of the centered board, published
+  // by Scene's zoom-fit so the HUD can size the side panel to that strip.
+  boardLeftPx: 0,
 
   // --- Enemy vessels (roster for the current mission; rebuilt by respawnEnemies) ---
   enemies: makeEnemiesForMission(1, MISSIONS[0].powers[0]),

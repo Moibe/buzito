@@ -28,6 +28,7 @@
   import SubPreview from '$lib/SubPreview.svelte';
   import IntroScene from '$lib/IntroScene.svelte';
   import CityThumb from '$lib/CityThumb.svelte';
+  import TileSpinner from '$lib/TileSpinner.svelte';
   import { MISSIONS, ENEMY_INFO, BONUS_INFO } from '$lib/missions';
   import type { BonusType } from '$lib/missions';
   import type { EnemyType } from '$lib/game.svelte';
@@ -42,6 +43,10 @@
   // One heart per current life — an arena win grants an extra life (uncapped,
   // can climb well past the starting count) and a death removes one.
   const lifeSlots = $derived(Array.from({ length: Math.max(0, game.lives) }));
+  // Width of the left side panel (stats): fills the empty strip beside the
+  // board, clamped so it stays readable on narrow screens (where it may spill a
+  // little over the board edge).
+  const statsWidth = $derived(Math.round(Math.max(148, Math.min(230, game.boardLeftPx - 10))));
   // Two-step confirm for the "Salir" (reset campaign) button.
   let confirmingExit = $state(false);
 
@@ -83,39 +88,46 @@
   const hpPct = $derived(
     config.sub.hp > 0 ? Math.min(100, (game.hp / config.sub.hp) * 100) : 0
   );
-  // Mission coverage percentage (clamped to 100 for display).
-  const missionPct = $derived(
-    game.totalTiles > 0 ? Math.min(100, (game.visitedCount / game.totalTiles) * 100) : 0
-  );
-  // True integer % target.
-  const missionPctInt = $derived(Math.round(missionPct));
-  // The % actually SHOWN — it climbs to the target ONE POINT AT A TIME so a jump
-  // (wide mode / power-ups / win fill) counts up 29,30,31… each with its own pop.
-  // Decreases (arena reset → 0) snap instantly. pctCursor is a plain mirror so
-  // the effect doesn't depend on displayedPct (only on the target).
-  let displayedPct = $state(0);
-  let pctCursor = 0;
+  // The tile count actually SHOWN — it climbs to the real visitedCount ONE TILE
+  // AT A TIME, so covering several at once (wide mode / power-ups / win fill)
+  // ticks up one by one. The % is DERIVED from this shown count, so the fraction
+  // and the % stay in lockstep and both step up together. Decreases (arena
+  // reset → 0) snap instantly. countCursor is a plain mirror so the effect
+  // depends only on the target, not on displayedCount.
+  let displayedCount = $state(0);
+  let countCursor = 0;
   $effect(() => {
-    const target = missionPctInt;
-    if (target <= pctCursor) {
-      pctCursor = target;
-      displayedPct = target;
+    const target = game.visitedCount;
+    if (target <= countCursor) {
+      countCursor = target;
+      displayedCount = target;
       return;
     }
     const advance = () => {
-      pctCursor += 1;
-      displayedPct = pctCursor;
+      countCursor += 1;
+      displayedCount = countCursor;
     };
     advance(); // first step immediately (responsive on a single +1)
-    if (pctCursor >= target) return;
-    // Pace: ~130ms per step, but speed up big jumps so the whole climb is ≤ ~1.6s.
-    const step = Math.max(45, Math.min(130, 1600 / (target - pctCursor)));
+    if (countCursor >= target) return;
+    // Speed up big jumps so the whole climb stays snappy (~1.6s cap), but never
+    // faster than ~14ms/tile.
+    const step = Math.max(14, Math.min(90, 1600 / (target - countCursor)));
     const id = setInterval(() => {
       advance();
-      if (pctCursor >= target) clearInterval(id);
+      if (countCursor >= target) clearInterval(id);
     }, step);
     return () => clearInterval(id);
   });
+  // % shown, derived from the animated count (so it pops as the count ticks).
+  // Only reads 100% at FULL coverage (cap at 99 otherwise) so it never shows
+  // "100%" beside a not-yet-full fraction like 362/363.
+  const displayedPct = $derived(
+    game.totalTiles > 0
+      ? displayedCount >= game.totalTiles
+        ? 100
+        : Math.min(99, Math.round((displayedCount / game.totalTiles) * 100))
+      : 0
+  );
 
   // The enemy whose context menu is open (null = no menu).
   const selectedEnemy = $derived(
@@ -301,10 +313,8 @@
       <span class="progress-pct">{displayedPct}%</span>
     {/key}
     <span class="progress-count">
-      <svg class="tile-spin" viewBox="0 0 24 24" aria-hidden="true">
-        <polygon points="12,2 20.66,7 20.66,17 12,22 3.34,17 3.34,7" />
-      </svg>
-      {game.visitedCount} / {game.totalTiles}
+      <span class="tile-3d" aria-hidden="true"><Canvas><TileSpinner /></Canvas></span>
+      {displayedCount} / {game.totalTiles}
     </span>
   </div>
 </div>
@@ -312,8 +322,9 @@
 <!-- Help: re-open the submarine how-to-play walkthrough at any time. -->
 <button class="help-btn" onclick={openSubIntro} title="¿Cómo jugar?" aria-label="Cómo jugar">?</button>
 
-<!-- Submarine stats panel (top-left) — hull bar, hexa-turnos ShipStats style. -->
-<div class="stats">
+<!-- Stats side panel — docked in the empty strip to the LEFT of the board,
+     vertically centered, its width adapting to that strip (game.boardLeftPx). -->
+<div class="stats" style="width: {statsWidth}px">
   <div class="stats-title">
     <button class="home-btn" onclick={goToLevelSelect} title="Volver a Misiones" aria-label="Volver a Misiones">
       🏠
@@ -541,7 +552,7 @@
   .progress {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     color: #ffd700;
     font: 700 15px/1 system-ui, sans-serif;
@@ -568,23 +579,13 @@
     opacity: 0.85;
     font-variant-numeric: tabular-nums;
   }
-  /* Little hex "tile" that spins slowly + forever next to the tile count. */
-  .tile-spin {
-    width: 16px;
-    height: 16px;
-    transform-origin: center;
-    animation: tileSpin 4.5s linear infinite;
-  }
-  .tile-spin polygon {
-    fill: rgba(255, 215, 0, 0.85);
-    stroke: rgba(120, 80, 20, 0.85);
-    stroke-width: 1.2;
-    stroke-linejoin: round;
-  }
-  @keyframes tileSpin {
-    to {
-      transform: rotate(360deg);
-    }
+  /* 3D hex tile (mini transparent canvas) spinning next to the tile count. */
+  .tile-3d {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    pointer-events: none;
   }
   /* Dramatic pop: overshoot scale + bright flash + glow burst, then settle. */
   @keyframes pctPop {
@@ -1245,24 +1246,25 @@
      from hexa-turnos ShipStats. */
   .stats {
     position: fixed;
-    top: 18px;
-    left: 18px;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
     z-index: 15;
-    min-width: 190px;
-    background: rgba(10, 20, 30, 0.85);
-    border: 1px solid rgba(255, 215, 0, 0.6);
-    border-radius: 8px;
+    box-sizing: border-box;
+    background: rgba(10, 20, 30, 0.55);
+    border: 1px solid rgba(255, 215, 0, 0.45);
+    border-radius: 10px;
     padding: 12px 14px;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     font: 500 13px/1.2 system-ui, sans-serif;
     color: #ffd700;
   }
   .stats-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 6px 8px;
   }
   .lvl-badge {
     font-weight: 800;
@@ -1279,6 +1281,7 @@
   }
   .stat-sub {
     font-size: 12px;
+    line-height: 1.35;
     color: rgba(255, 255, 255, 0.75);
     padding-bottom: 8px;
     margin-bottom: 2px;
