@@ -1,13 +1,38 @@
 import type { EnemyType } from './game.svelte';
 
-// Display metadata for each enemy type (used by the admin missions view).
-export const ENEMY_INFO: Record<EnemyType, { name: string; emoji: string }> = {
-  cargo: { name: 'Carguero', emoji: '📦' },
-  warship: { name: 'Destructor', emoji: '⚔️' },
-  minelayer: { name: 'Minador', emoji: '💣' },
-  submarineIx: { name: 'U-Boot', emoji: '🛥️' },
-  bomber: { name: 'Bombardero', emoji: '✈️' },
-  shark: { name: 'Tiburón', emoji: '🦈' },
+// Display metadata for each enemy type (used by the admin missions view and the
+// arena-entrance "new enemy" cards). `desc` explains what the enemy does.
+export const ENEMY_INFO: Record<EnemyType, { name: string; emoji: string; desc: string }> = {
+  cargo: {
+    name: 'Carguero',
+    emoji: '📦',
+    desc: 'Barco de carga lento y resistente. No dispara, pero su casco pesado te hace mucho daño si choca contigo. Rodéalo o mantén distancia.',
+  },
+  warship: {
+    name: 'Destructor',
+    emoji: '⚔️',
+    desc: 'Patrulla y acribilla con su metralleta a tu submarino cuando estás en la superficie y a su alcance. Sumérgete para esquivar sus balas.',
+  },
+  minelayer: {
+    name: 'Minador',
+    emoji: '💣',
+    desc: 'Navega en línea sembrando minas de contacto que te dañan a cualquier profundidad. Vigila por dónde pasas y despeja su rastro.',
+  },
+  submarineIx: {
+    name: 'U-Boot',
+    emoji: '🛥️',
+    desc: 'Submarino que alterna entre superficie y profundidad. Solo te embiste cuando ambos están al mismo nivel: cambia de profundidad para evadirlo.',
+  },
+  bomber: {
+    name: 'Bombardero',
+    emoji: '✈️',
+    desc: 'Suelta salvas de bombas que estallan en un área. Mantente en movimiento y lejos de su zona de impacto.',
+  },
+  shark: {
+    name: 'Tiburón',
+    emoji: '🦈',
+    desc: 'Depredador que se sumerge y dispara torpedos en línea recta bajo el agua. Emerge a la superficie para que sus torpedos te pasen de largo.',
+  },
 };
 
 // Bonuses = the tile-liberator power-ups, introduced gradually like enemies.

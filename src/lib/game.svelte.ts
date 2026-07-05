@@ -537,6 +537,14 @@ export const game = $state({
   // buttons hold still and clicks land (otherwise a moving vessel drags the
   // menu out from under the cursor).
   menuHover: false,
+
+  // Enemy types the player has already been introduced to (persisted). The
+  // arena-entrance cinematic pauses to explain a type only the FIRST time it's
+  // ever seen; known types just emerge without stopping.
+  introducedEnemies: [] as EnemyType[],
+  // While non-null, the entrance is paused presenting a new enemy type: the HUD
+  // shows an explanation card near (sx,sy) and the game waits for "Continuar".
+  introCard: null as { type: EnemyType; sx: number; sy: number } | null,
 });
 
 // Restore the per-player name saved on a previous visit.
@@ -573,6 +581,34 @@ export function recordConquered(city: string) {
     game.conquered.push(city);
     saveConquered();
   }
+}
+
+// Restore which enemy types have already been introduced (per-player).
+if (typeof localStorage !== 'undefined') {
+  try {
+    const v = JSON.parse(localStorage.getItem('buzito.introducedEnemies') || 'null');
+    if (Array.isArray(v)) {
+      game.introducedEnemies = [
+        ...new Set(v.filter((x): x is EnemyType => typeof x === 'string')),
+      ];
+    }
+  } catch {
+    /* ignore corrupt value */
+  }
+}
+
+// Dismiss the enemy-introduction card ("Continuar"): remember the type as
+// introduced (so it's never explained again) and resume the entrance.
+export function dismissIntroCard() {
+  const card = game.introCard;
+  if (!card) return;
+  if (!game.introducedEnemies.includes(card.type)) {
+    game.introducedEnemies.push(card.type);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('buzito.introducedEnemies', JSON.stringify(game.introducedEnemies));
+    }
+  }
+  game.introCard = null;
 }
 
 export function toggleSubmerged() {
@@ -732,6 +768,7 @@ export function resetGame() {
   game.visited.clear();
   game.visitedCount = 0;
   flipDelays.clear(); // drop any pending flip stagger from the previous life/arena
+  game.introCard = null; // no stale enemy-intro card carried into a fresh arena
   closeEnemyMenu();
 }
 

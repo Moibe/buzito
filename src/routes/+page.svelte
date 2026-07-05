@@ -21,11 +21,12 @@
     setSubDetailColor,
     setSubDetail,
     setPlayerName,
+    dismissIntroCard,
   } from '$lib/game.svelte';
   import SubPreview from '$lib/SubPreview.svelte';
   import IntroScene from '$lib/IntroScene.svelte';
   import CityThumb from '$lib/CityThumb.svelte';
-  import { MISSIONS } from '$lib/missions';
+  import { MISSIONS, ENEMY_INFO } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
 
   // The current mission's difficulty definition (for the level indicator).
@@ -314,6 +315,21 @@
         {campaignDone ? '🏆 Campaña completada — Ver misiones' : '🏁 Ciudad completada — Volver a misiones'}
       </button>
     {/if}
+  </div>
+{/if}
+
+<!-- "New enemy" presentation card — shown during the arena entrance the first
+     time a type is ever seen; anchored next to the highlighted enemy. -->
+{#if game.introCard}
+  {@const info = ENEMY_INFO[game.introCard.type]}
+  <div class="enemy-intro" style="left: {game.introCard.sx}px; top: {game.introCard.sy}px;">
+    <span class="ei-tag">¡Nuevo enemigo!</span>
+    <div class="ei-head">
+      <span class="ei-emoji">{info.emoji}</span>
+      <strong>{info.name}</strong>
+    </div>
+    <p class="ei-desc">{info.desc}</p>
+    <button class="ei-go" onclick={dismissIntroCard}>Continuar →</button>
   </div>
 {/if}
 
@@ -1200,6 +1216,77 @@
   }
   .win-cta button:active {
     transform: translateY(0);
+  }
+
+  /* "New enemy" presentation card — anchored next to the highlighted enemy. */
+  .enemy-intro {
+    position: fixed;
+    transform: translate(24px, -50%);
+    width: 300px;
+    max-width: 76vw;
+    z-index: 26;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 18px;
+    background: rgba(12, 26, 42, 0.96);
+    border: 1px solid rgba(255, 215, 0, 0.6);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 26px rgba(255, 215, 0, 0.22);
+    animation: eipop 0.3s ease-out;
+    pointer-events: auto;
+  }
+  @keyframes eipop {
+    from {
+      opacity: 0;
+      transform: translate(10px, -50%) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translate(24px, -50%) scale(1);
+    }
+  }
+  .ei-tag {
+    align-self: flex-start;
+    background: rgba(255, 215, 0, 0.16);
+    color: #ffd700;
+    font: 800 11px/1 system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 9px;
+    border-radius: 999px;
+  }
+  .ei-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+  }
+  .ei-emoji {
+    font-size: 26px;
+  }
+  .ei-head strong {
+    font: 800 19px/1 system-ui, sans-serif;
+  }
+  .ei-desc {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.85);
+    font: 500 13.5px/1.5 system-ui, sans-serif;
+  }
+  .ei-go {
+    align-self: flex-end;
+    margin-top: 2px;
+    background: linear-gradient(135deg, #ffd700, #ffb300);
+    color: #10233f;
+    border: none;
+    border-radius: 9px;
+    padding: 9px 18px;
+    font: 800 14px/1 system-ui, sans-serif;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .ei-go:hover {
+    transform: translateY(-1px);
   }
 
   /* Red vignette flash when the sub takes a hit. */

@@ -152,6 +152,68 @@
   // (~one tile long) as tiles grow/shrink.
   const SUB_SCALE = TILE_SIZE;
 
+  // --- Arena entrance: the actors emerge from below one-by-one (the submarine,
+  // then each enemy, then all bonuses together) while the game is frozen for a
+  // brief cinematic. introElapsed is a Scene-local clock that self-resets every
+  // arena (Scene remounts per arena via {#key game.arena}). ---
+  const APPEAR_DUR = 0.8; // seconds for one actor to rise + grow in (slower = more dramatic)
+  const ENEMY_STAGGER = 0.38; // gap between successive enemies' entrances (more space)
+  const EMERGE_DEPTH = 2.6; // how far below an actor starts before rising
+  const introEnemyCount = game.enemies.length; // fixed roster size at arena start
+  const INTRO_ENEMIES_START = APPEAR_DUR; // enemies begin once the sub is up
+  const INTRO_BONUS_START =
+    INTRO_ENEMIES_START + Math.max(0, introEnemyCount - 1) * ENEMY_STAGGER + APPEAR_DUR;
+  const INTRO_END = INTRO_BONUS_START + APPEAR_DUR; // gameplay unfreezes here
+  let introElapsed = $state(0);
+  // Eased 0→1 "emerged" amount for an actor whose entrance starts at `start` sec.
+  function appearAmt(start: number): number {
+    const a = Math.min(1, Math.max(0, (introElapsed - start) / APPEAR_DUR));
+    return a * a * (3 - 2 * a); // smoothstep
+  }
+  // The submarine leads; all bonuses emerge together after the last enemy.
+  const subEmerge = $derived(appearAmt(0));
+  const bonusEmerge = $derived(appearAmt(INTRO_BONUS_START));
+  // True once the whole entrance is over — gates helm/clicks/etc.
+  const introDone = $derived(introElapsed >= INTRO_END);
+
+  // --- "New enemy" presentation: the first time a type is ever seen, the
+  // entrance pauses on it with an explanation card (see game.introCard). ---
+  const presentedThisRun = new Set<string>(); // types already presented this arena
+  let presentedId = $state<string | null>(null); // enemy id being highlighted
+  // When an as-yet-unseen enemy finishes emerging, pause and show its card.
+  function maybePresentEnemy() {
+    for (let i = 0; i < introEnemyCount; i++) {
+      const e = game.enemies[i];
+      if (!e) continue;
+      if (game.introducedEnemies.includes(e.type) || presentedThisRun.has(e.type)) continue;
+      const finish = INTRO_ENEMIES_START + i * ENEMY_STAGGER + APPEAR_DUR;
+      if (introElapsed >= finish) {
+        presentedThisRun.add(e.type);
+        presentEnemy(i, e.id);
+        return;
+      }
+    }
+  }
+  function presentEnemy(index: number, id: string) {
+    const m = movers[id];
+    let sx = window.innerWidth / 2;
+    let sy = window.innerHeight * 0.42;
+    if (cam && m) {
+      projScratch.set(m.x, 0, m.z).project(cam);
+      sx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
+      sy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
+    }
+    // Keep the card on-screen (it sits to the right of, and centered on, the
+    // point). Margins collapse toward center on tiny viewports so the clamp
+    // bounds never invert.
+    const xRight = Math.max(16, window.innerWidth - 340);
+    const yMargin = Math.min(120, window.innerHeight / 2);
+    sx = Math.max(16, Math.min(xRight, sx));
+    sy = Math.max(yMargin, Math.min(window.innerHeight - yMargin, sy));
+    presentedId = id;
+    game.introCard = { type: game.enemies[index].type, sx, sy };
+  }
+
   // --- The arena (the game world) ---
   // A FIXED rectangle of hexes aligned to the iso camera's screen axes
   // (u = screen right, v = screen depth; see buildBoardIsoRect). Its WORLD
@@ -312,7 +374,8 @@
           e.preventDefault();
           break;
         case ' ':
-          if (!e.repeat) {
+          // Ignored during the arena-entrance cinematic (sub not yet in control).
+          if (!e.repeat && introElapsed >= INTRO_END) {
             coverCurrentTile();
             toggleSubmerged();
           }
@@ -370,8 +433,19 @@
   // bow. With rotation.y = θ, the bow (local -Z) points at world
   // (-sin θ, -cos θ) — see the coordinate conventions in hexa-turnos.
   useTask((delta) => {
-    // A sunk sub doesn't answer the helm — controls freeze until restart.
-    const alive = !game.gameOver;
+    // Advance the arena-entrance clock here (this is the first useTask each
+    // frame, so the main loop below reads the up-to-date value). Frozen while a
+    // "new enemy" card is up so the presentation waits for "Continuar".
+    const introPaused = game.introCard !== null;
+    if (!introPaused && introElapsed < INTRO_END) {
+      introElapsed += delta;
+      maybePresentEnemy();
+    }
+    // Drop the highlight once the card has been dismissed.
+    if (!introPaused && presentedId !== null) presentedId = null;
+    // A sunk sub doesn't answer the helm; nor does it during the entrance
+    // cinematic — controls freeze until the sub has emerged and the intro ends.
+    const alive = !game.gameOver && introDone && !introPaused;
     // "Mayor velocidad" ability: multiply the base speed while enabled. Guard
     // mult > 0 so an emptied/zeroed panel field (yields null) can't freeze the
     // sub — it just falls back to the base speed until a number is typed.
@@ -1110,10 +1184,15 @@
 
   const projScratch = new Vector3();
   useTask((delta) => {
+    // Frozen while the arena entrance cinematic plays: actors are emerging, so
+    // suppress all simulation (helm is frozen in the physics loop above). Bonus
+    // SPAWN still runs so they exist to emerge; only COLLECTION is gated.
+    const frozen = introElapsed < INTRO_END;
+
     // --- Player missiles: fire with M while the ability is on (auto-repeats at
     // the configured interval while held). ---
     if (missileCooldown > 0) missileCooldown -= delta;
-    if (config.player.missiles.enabled && keys.m && !game.gameOver && missileCooldown <= 0) {
+    if (config.player.missiles.enabled && keys.m && !game.gameOver && !frozen && missileCooldown <= 0) {
       launchMissile();
       missileCooldown = Math.max(0.1, config.player.missiles.interval);
     }
@@ -1124,6 +1203,7 @@
       const m = movers[e.id];
       const cfg = MOVER_CFG[e.type];
       if (!m || !cfg) continue;
+      if (frozen) { m.moving = false; continue; } // hold still while emerging
       const spd = ep[e.type].speed; // tunable per-enemy speed, scaled by mission power
       let th = m.heading;
       if (m.moveTarget) {
@@ -1303,7 +1383,7 @@
     // --- Destroyer guns: EVERY active warship strafes the surfaced sub when
     // it's within range, each on its own cooldown. ---
     for (const e of game.enemies) {
-      if (e.type !== 'warship' || !e.active) continue;
+      if (e.type !== 'warship' || !e.active || frozen) continue;
       const wm = movers[e.id];
       if (!wm) continue;
       const canFire =
@@ -1340,7 +1420,7 @@
     // rams it from below — it takes damage + gets flung to an adjacent tile,
     // and the sub takes NONE (this replaces the ram that would otherwise fire
     // now that both are at the surface). ---
-    if (prevSubmerged && !game.submerged && !game.gameOver) {
+    if (prevSubmerged && !game.submerged && !game.gameOver && !frozen) {
       for (const e of game.enemies) {
         const m = movers[e.id];
         if (!m || m.submerged) continue; // only enemies on the surface
@@ -1371,7 +1451,7 @@
         ramCooldowns[e.id] = cd - delta;
         continue;
       }
-      if (game.gameOver) continue;
+      if (game.gameOver || frozen) continue;
       const enemySubmerged = DYNAMIC.has(e.type) ? movers[e.id].submerged : false;
       if (enemySubmerged !== game.submerged) continue; // different levels → pass by
       const p = enemyPos(e);
@@ -1418,7 +1498,7 @@
     }
 
     // --- Bomber: EVERY active bomber lobs salvos on its own timer. ---
-    if (!game.gameOver) {
+    if (!game.gameOver && !frozen) {
       for (const e of game.enemies) {
         if (e.type !== 'bomber' || !e.active) continue;
         const bmm = movers[e.id];
@@ -1530,7 +1610,7 @@
     pickupElapsed += delta;
     pickupPulse = Math.sin(pickupElapsed * 2.2);
     if (pickups.some((p) => p.active)) {
-      if (!game.gameOver) {
+      if (!game.gameOver && !frozen) {
         for (const p of pickups) {
           if (!p.active || p.submerged !== game.submerged) continue;
           const dx = p.x - game.x;
@@ -1550,7 +1630,7 @@
     // --- Star power-ups: collect on proximity (any depth) → liberate the
     // asterisk of lines; respawn the set a while after it's cleared. ---
     if (stars.some((s) => s.active)) {
-      if (!game.gameOver) {
+      if (!game.gameOver && !frozen) {
         for (const s of stars) {
           if (!s.active) continue;
           const dx = s.x - game.x;
@@ -1572,7 +1652,7 @@
     // --- X power-ups: collect on proximity (any depth) → liberate the two
     // diagonal lines of the X at its angle; respawn a while after cleared. ---
     if (xstars.some((s) => s.active)) {
-      if (!game.gameOver) {
+      if (!game.gameOver && !frozen) {
         for (const s of xstars) {
           if (!s.active) continue;
           const dx = s.x - game.x;
@@ -1593,7 +1673,7 @@
     // --- Line power-ups: collect on proximity (any depth) → liberate a single
     // line at its angle; respawn a while after cleared. ---
     if (linestars.some((s) => s.active)) {
-      if (!game.gameOver) {
+      if (!game.gameOver && !frozen) {
         for (const s of linestars) {
           if (!s.active) continue;
           const dx = s.x - game.x;
@@ -1617,6 +1697,7 @@
     if (
       !game.won &&
       !game.gameOver &&
+      !frozen &&
       game.totalTiles > 0 &&
       game.visitedCount / game.totalTiles >= config.rules.winPct
     ) {
@@ -1637,6 +1718,12 @@
       for (const e of game.enemies) {
         const m = movers[e.id];
         if (!m) continue;
+        // Hide the HTML health bars during the entrance (enemies still emerging).
+        if (frozen) {
+          e.sx = -9999;
+          e.sy = -9999;
+          continue;
+        }
         projScratch.set(m.x, 0, m.z).project(cam);
         e.sx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
         e.sy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
@@ -1714,84 +1801,54 @@
   radius={(ARENA_HALF_U + ARENA_HALF_V) * Math.SQRT1_2}
 />
 
-<Submarine
-  x={game.x}
-  z={game.z}
-  heading={game.heading}
-  moving={game.moving}
-  submerged={game.submerged}
-  scale={SUB_SCALE}
-  color={config.sub.color}
-  detailColor={config.sub.detailColor}
-  detail={config.sub.detail}
-/>
+<!-- Submarine — emerges from below first at arena start (subEmerge 0→1). -->
+<T.Group position={[0, (subEmerge - 1) * EMERGE_DEPTH, 0]}>
+  <Submarine
+    x={game.x}
+    z={game.z}
+    heading={game.heading}
+    moving={game.moving}
+    submerged={game.submerged}
+    scale={SUB_SCALE * subEmerge}
+    color={config.sub.color}
+    detailColor={config.sub.detailColor}
+    detail={config.sub.detail}
+  />
+</T.Group>
 
-<!-- Enemy vessels — click one to open its context menu (activate/deactivate). -->
-{#each game.enemies as e (e.id)}
-  {#if e.type === 'warship'}
-    {@const m = movers[e.id]}
-    <Warship
-      x={m.x}
-      z={m.z}
-      heading={m.heading}
-      moving={m.moving}
-      scale={SUB_SCALE}
-      onclick={() => selectEnemy(e.id)}
-    />
-  {:else if e.type === 'cargo'}
-    {@const m = movers[e.id]}
-    <Cargo
-      x={m.x}
-      z={m.z}
-      heading={m.heading}
-      moving={m.moving}
-      scale={SUB_SCALE}
-      onclick={() => selectEnemy(e.id)}
-    />
-  {:else if e.type === 'bomber'}
-    {@const m = movers[e.id]}
-    <Bomber
-      x={m.x}
-      z={m.z}
-      heading={m.heading}
-      moving={m.moving}
-      scale={SUB_SCALE}
-      onclick={() => selectEnemy(e.id)}
-    />
-  {:else if e.type === 'submarineIx'}
-    {@const m = movers[e.id]}
-    <SubmarineIX
-      x={m.x}
-      z={m.z}
-      heading={m.heading}
-      moving={m.moving}
-      submerged={m.submerged}
-      scale={SUB_SCALE}
-      onclick={() => selectEnemy(e.id)}
-    />
-  {:else if e.type === 'shark'}
-    {@const m = movers[e.id]}
-    <Shark
-      x={m.x}
-      z={m.z}
-      heading={m.heading}
-      moving={m.moving}
-      submerged={m.submerged}
-      scale={SUB_SCALE}
-      onclick={() => selectEnemy(e.id)}
-    />
-  {:else if e.type === 'minelayer'}
-    {@const m = movers[e.id]}
-    <Minelayer
-      x={m.x}
-      z={m.z}
-      heading={m.heading}
-      moving={m.moving}
-      scale={SUB_SCALE}
-      onclick={() => selectEnemy(e.id)}
-    />
+<!-- Enemy vessels — click one to open its context menu (activate/deactivate).
+     Each emerges from below in turn at arena start (staggered by index i). -->
+{#each game.enemies as e, i (e.id)}
+  {@const m = movers[e.id]}
+  {#if m}
+    {@const ea = appearAmt(INTRO_ENEMIES_START + i * ENEMY_STAGGER)}
+    <T.Group position={[0, (ea - 1) * EMERGE_DEPTH, 0]}>
+      {#if e.type === 'warship'}
+        <Warship x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+      {:else if e.type === 'cargo'}
+        <Cargo x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+      {:else if e.type === 'bomber'}
+        <Bomber x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+      {:else if e.type === 'submarineIx'}
+        <SubmarineIX x={m.x} z={m.z} heading={m.heading} moving={m.moving} submerged={m.submerged} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+      {:else if e.type === 'shark'}
+        <Shark x={m.x} z={m.z} heading={m.heading} moving={m.moving} submerged={m.submerged} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+      {:else if e.type === 'minelayer'}
+        <Minelayer x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+      {/if}
+    </T.Group>
   {/if}
 {/each}
+
+<!-- Highlight ring under the enemy being introduced (pulses while its card is up). -->
+{#if game.introCard && presentedId && movers[presentedId]}
+  {@const hm = movers[presentedId]}
+  {@const rp = SUB_SCALE * (1.1 + 0.12 * pickupPulse)}
+  <T.Mesh position={[hm.x, 0.5, hm.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[rp, rp, rp]}>
+    <T.RingGeometry args={[0.72, 0.96, 40]} />
+    <T.MeshBasicMaterial color="#ffd700" transparent opacity={0.75} depthWrite={false} toneMapped={false} />
+  </T.Mesh>
+{/if}
 
 <!-- Floating contact mines laid by the Minelayer (harm the sub at any depth). -->
 {#each mines as mn}
@@ -1906,8 +1963,8 @@
      matching depth). Gentle shared bob/scale pulse. -->
 {#each pickups as p}
   {#if p.active}
-    {@const py = p.submerged ? 0.3 : 0.55}
-    {@const s = 0.27 * (1 + 0.12 * pickupPulse)}
+    {@const py = (p.submerged ? 0.3 : 0.55) + (bonusEmerge - 1) * EMERGE_DEPTH}
+    {@const s = 0.27 * (1 + 0.12 * pickupPulse) * bonusEmerge}
     <T.Mesh position={[p.x, py + 0.04 * pickupPulse, p.z]} scale={[s, s, s]}>
       <T.SphereGeometry args={[1, 16, 12]} />
       <T.MeshStandardMaterial
@@ -1923,8 +1980,8 @@
     {#if p.submerged}
       <!-- Surface marker: a pulsing cyan ring on the water directly above a
            submerged orb so it's easy to spot (dive there to collect it). -->
-      {@const mr = 0.6 * (1 + 0.28 * pickupPulse)}
-      <T.Mesh position={[p.x, 0.47, p.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[mr, mr, mr]}>
+      {@const mr = 0.6 * (1 + 0.28 * pickupPulse) * bonusEmerge}
+      <T.Mesh position={[p.x, 0.47 + (bonusEmerge - 1) * EMERGE_DEPTH, p.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[mr, mr, mr]}>
         <T.RingGeometry args={[0.6, 1.0, 24]} />
         <T.MeshBasicMaterial color="#5fe8ff" transparent opacity={0.6} depthWrite={false} toneMapped={false} />
       </T.Mesh>
@@ -1936,7 +1993,9 @@
      on its horizontal, vertical and diagonal lines. -->
 {#each stars as s}
   {#if s.active}
-    <Star x={s.x} z={s.z} scale={SUB_SCALE} />
+    <T.Group position={[0, (bonusEmerge - 1) * EMERGE_DEPTH, 0]}>
+      <Star x={s.x} z={s.z} scale={SUB_SCALE * bonusEmerge} />
+    </T.Group>
   {/if}
 {/each}
 
@@ -1944,7 +2003,9 @@
      liberate the two diagonal lines of the X. -->
 {#each xstars as s}
   {#if s.active}
-    <XStar x={s.x} z={s.z} angle={s.angle} scale={SUB_SCALE} />
+    <T.Group position={[0, (bonusEmerge - 1) * EMERGE_DEPTH, 0]}>
+      <XStar x={s.x} z={s.z} angle={s.angle} scale={SUB_SCALE * bonusEmerge} />
+    </T.Group>
   {/if}
 {/each}
 
@@ -1952,7 +2013,9 @@
      that single line. -->
 {#each linestars as s}
   {#if s.active}
-    <LineStar x={s.x} z={s.z} angle={s.angle} scale={SUB_SCALE} />
+    <T.Group position={[0, (bonusEmerge - 1) * EMERGE_DEPTH, 0]}>
+      <LineStar x={s.x} z={s.z} angle={s.angle} scale={SUB_SCALE * bonusEmerge} />
+    </T.Group>
   {/if}
 {/each}
 
