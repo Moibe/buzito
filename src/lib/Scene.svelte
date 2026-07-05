@@ -775,24 +775,31 @@
   // Three blue orbs (each randomly submerged or surfaced) appear on the board;
   // touching one AT THE SAME DEPTH heals the sub. Once all three are taken, a
   // 3-minute timer runs before a fresh trio appears.
-  const PICKUP_COUNT = 3;
+  const PICKUP_POOL = 12; // max active health orbs (per-mission count ≤ this)
   const PICKUP_RADIUS = 1.1;
-  // Heal amount / respawn delay live in config.pickup (tunable).
+  // Heal amount / respawn delay live in config.pickup; the COUNT is per-mission
+  // (bonuses.health).
   type Pickup = { active: boolean; x: number; z: number; submerged: boolean };
   const pickups = $state<Pickup[]>(
-    Array.from({ length: PICKUP_COUNT }, () => ({ active: false, x: 0, z: 0, submerged: false }))
+    Array.from({ length: PICKUP_POOL }, () => ({ active: false, x: 0, z: 0, submerged: false }))
   );
-  let pickupRespawnTimer = 0; // counts down while the trio is cleared
+  let pickupRespawnTimer = 0; // counts down while the set is cleared
   let pickupElapsed = 0;
   let pickupPulse = $state(0); // shared gentle bob/scale pulse
 
+  // Spawn the mission's health-orb count at random points; deactivate the rest.
   function spawnPickups() {
-    for (const p of pickups) {
-      const pt = randomArenaPoint();
-      p.active = true;
-      p.x = pt.x;
-      p.z = pt.z;
-      p.submerged = Math.random() < 0.5;
+    const count = Math.max(0, Math.min(pickups.length, Math.round(bonuses.health)));
+    for (let i = 0; i < pickups.length; i++) {
+      if (i < count) {
+        const pt = randomArenaPoint();
+        pickups[i].active = true;
+        pickups[i].x = pt.x;
+        pickups[i].z = pt.z;
+        pickups[i].submerged = Math.random() < 0.5;
+      } else {
+        pickups[i].active = false;
+      }
     }
   }
 
@@ -1432,7 +1439,7 @@
         }
         if (!pickups.some((p) => p.active)) pickupRespawnTimer = config.pickup.respawn;
       }
-    } else if (!game.gameOver) {
+    } else if (!game.gameOver && bonuses.health > 0) {
       pickupRespawnTimer -= delta;
       if (pickupRespawnTimer <= 0) spawnPickups();
     }

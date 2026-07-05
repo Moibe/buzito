@@ -11,13 +11,14 @@ export const ENEMY_INFO: Record<EnemyType, { name: string; emoji: string }> = {
 };
 
 // Bonuses = the tile-liberator power-ups, introduced gradually like enemies.
-export type BonusType = 'line' | 'xstar' | 'star';
+export type BonusType = 'health' | 'line' | 'xstar' | 'star';
 export const BONUS_INFO: Record<BonusType, { name: string; emoji: string }> = {
+  health: { name: 'Vida', emoji: '💙' },
   line: { name: 'Línea', emoji: '➖' },
   xstar: { name: 'X', emoji: '✖️' },
   star: { name: 'Estrella', emoji: '✳️' },
 };
-export type Bonuses = { line: number; xstar: number; star: number };
+export type Bonuses = { health: number; line: number; xstar: number; star: number };
 
 export type MissionEnemy = { type: EnemyType; count: number };
 export type Mission = {
@@ -43,7 +44,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
     label: 'Muy fácil',
     power: 0.9,
     enemies: [{ type: 'cargo', count: 1 }],
-    bonuses: { line: 1, xstar: 0, star: 0 },
+    bonuses: { health: 2, line: 1, xstar: 0, star: 0 },
     note: 'Un solo Carguero que patrulla y embiste. Para aprender a moverte y cubrir mosaicos.',
   },
   {
@@ -54,7 +55,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
       { type: 'cargo', count: 1 },
       { type: 'warship', count: 1 },
     ],
-    bonuses: { line: 1, xstar: 0, star: 0 },
+    bonuses: { health: 2, line: 1, xstar: 0, star: 0 },
     note: 'Aparece el Destructor y sus metralletas: sumérgete para romper su línea de tiro.',
   },
   {
@@ -66,7 +67,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
       { type: 'warship', count: 1 },
       { type: 'minelayer', count: 1 },
     ],
-    bonuses: { line: 2, xstar: 1, star: 0 },
+    bonuses: { health: 3, line: 2, xstar: 1, star: 0 },
     note: 'Entra el Minador: siembra minas flotantes que dañan por arriba y por abajo. Debuta la X.',
   },
   {
@@ -79,7 +80,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
       { type: 'minelayer', count: 1 },
       { type: 'submarineIx', count: 1 },
     ],
-    bonuses: { line: 2, xstar: 1, star: 0 },
+    bonuses: { health: 3, line: 2, xstar: 1, star: 0 },
     note: 'El U-Boot bucea y emerge, y te embiste cuando está a tu misma profundidad.',
   },
   {
@@ -93,7 +94,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
       { type: 'submarineIx', count: 1 },
       { type: 'bomber', count: 1 },
     ],
-    bonuses: { line: 2, xstar: 1, star: 1 },
+    bonuses: { health: 3, line: 2, xstar: 1, star: 1 },
     note: 'El Bombardero suelta salvas de bombas que caen a cualquier profundidad. Debuta la Estrella.',
   },
   {
@@ -108,7 +109,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
       { type: 'bomber', count: 1 },
       { type: 'shark', count: 1 },
     ],
-    bonuses: { line: 3, xstar: 2, star: 1 },
+    bonuses: { health: 4, line: 3, xstar: 2, star: 1 },
     note: 'Llega el Tiburón con sus torpedos submarinos. Ya están todos los tipos en el mar.',
   },
   {
@@ -123,7 +124,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
       { type: 'bomber', count: 2 },
       { type: 'shark', count: 2 },
     ],
-    bonuses: { line: 3, xstar: 2, star: 2 },
+    bonuses: { health: 4, line: 3, xstar: 2, star: 2 },
     note: 'Flota completa y más numerosa; todos más rápidos, más resistentes y más letales.',
   },
   {
@@ -138,7 +139,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
       { type: 'bomber', count: 2 },
       { type: 'shark', count: 3 },
     ],
-    bonuses: { line: 3, xstar: 3, star: 3 },
+    bonuses: { health: 5, line: 3, xstar: 3, star: 3 },
     note: 'Asalto total: máxima cantidad y características al máximo filo (poder ×2).',
   },
 ];
