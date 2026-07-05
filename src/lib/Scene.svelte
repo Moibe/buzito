@@ -100,11 +100,6 @@
   // Must sit BELOW the lowest tile top: tops bob 0.4 ± wave(0.06) = 0.34..0.46,
   // so a plane above 0.34 pokes through the wave troughs (image bleeds in bands).
   const ARENA_IMG_Y = 0.28;
-  // Image extent: kept INSIDE the tile coverage (a hair under ARENA_HALF) so at
-  // the start every part of the image sits under a tile — nothing peeks out
-  // around the edges. (The plane must not reach the frame, or its border shows.)
-  const ARENA_IMG_HALF_U = ARENA_HALF_U - 1;
-  const ARENA_IMG_HALF_V = ARENA_HALF_V - 1;
   let arenaTex = $state.raw<ThreeTexture | undefined>(undefined);
   $effect(() => {
     const n = game.missionCityN;
@@ -170,6 +165,11 @@
   // widescreen monitors with little margin.
   const ARENA_HALF_U = 20;
   const ARENA_HALF_V = 20;
+  // City-image extent: kept INSIDE the tile coverage (a hair under ARENA_HALF)
+  // so at the start every part of the image sits under a tile — nothing peeks
+  // out around the edges. (Reaching the frame would expose the photo's border.)
+  const ARENA_IMG_HALF_U = ARENA_HALF_U - 1;
+  const ARENA_IMG_HALF_V = ARENA_HALF_V - 1;
 
   // Frame box dimensions — single source of truth, passed to <ArenaFrame>
   // AND used by the zoom-fit below so the 3D rails are budgeted for.
