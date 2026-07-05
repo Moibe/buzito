@@ -746,7 +746,7 @@
     margin: 10px 0 0;
     font-size: 12.5px;
     line-height: 1.45;
-    color: rgba(255, 255, 255, 0.72);
+    color: #fff;
   }
   /* Drop highlight while dragging an enemy type over a mission card. */
   .mission.dragover {
