@@ -38,6 +38,8 @@
   const nextLevel = $derived(Math.min(MISSIONS.length, game.completed.length + 1));
   const nextMission = $derived(MISSIONS[nextLevel - 1]);
   const campaignDone = $derived(game.completed.length >= MISSIONS.length);
+  // Fixed-length slots for the lives display (pink hearts, filled/empty).
+  const lifeSlots = Array.from({ length: STARTING_LIVES });
   // Two-step confirm for the "Salir" (reset campaign) button.
   let confirmingExit = $state(false);
 
@@ -193,7 +195,12 @@
         Elige tu ciudad — será tu
         <b>Nivel {nextLevel}</b> · {nextMission.label}
         <span class="ls-progress">({game.completed.length}/{MISSIONS.length} liberadas)</span>
-        <span class="ls-progress">· 🔄 {game.lives}/{STARTING_LIVES} vidas</span>
+        <span class="ls-progress lives-hearts">
+          ·
+          {#each lifeSlots as _, i}
+            <span class="life-heart" class:lost={i >= game.lives}>♥</span>
+          {/each}
+        </span>
       </p>
     {/if}
     <button class="sub-back" onclick={goToSubScreen}>◄ Submarino</button>
@@ -274,7 +281,11 @@
   <div class="stat-sub">🎯 {game.missionCity} · Arena {game.arena}/{ARENAS_PER_CITY}</div>
   <div class="stat-row" style="margin-top: 10px;">
     <span class="stat-label">Vidas</span>
-    <span class="stat-value">{game.lives}/{STARTING_LIVES}</span>
+    <span class="stat-value lives-hearts">
+      {#each lifeSlots as _, i}
+        <span class="life-heart" class:lost={i >= game.lives}>♥</span>
+      {/each}
+    </span>
   </div>
   <div class="stat-row" style="margin-top: 6px;">
     <span class="stat-label">Energía</span>
@@ -345,7 +356,12 @@
       {#if game.lives > 0}
         <h1>¡Hundido!</h1>
         <p>{game.deathCause || 'Tu energía se agotó.'}</p>
-        <p class="gameover-lives">Vidas restantes: {game.lives}/{STARTING_LIVES}</p>
+        <p class="gameover-lives lives-hearts">
+          Vidas restantes:
+          {#each lifeSlots as _, i}
+            <span class="life-heart" class:lost={i >= game.lives}>♥</span>
+          {/each}
+        </p>
         <button onclick={resetGame}>Reintentar</button>
       {:else}
         <h1>☠ Fin de la partida</h1>
@@ -1125,6 +1141,23 @@
   }
   .stat-value {
     font-variant-numeric: tabular-nums;
+  }
+  /* Lives display: pink hearts (filled = remaining, dim outline = lost). */
+  .lives-hearts {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .life-heart {
+    color: #ff5c9e;
+    font-size: 15px;
+    line-height: 1;
+    text-shadow: 0 0 6px rgba(255, 92, 158, 0.6);
+  }
+  .life-heart.lost {
+    color: transparent;
+    -webkit-text-stroke: 1px rgba(255, 92, 158, 0.4);
+    text-shadow: none;
   }
   .stat-bar {
     height: 6px;
