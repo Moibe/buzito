@@ -436,7 +436,7 @@
     gap: 18px;
   }
   .ls-tile {
-    width: 120px;
+    width: 152px;
     height: 120px;
     display: flex;
     flex-direction: column;
