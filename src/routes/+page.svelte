@@ -273,12 +273,14 @@
     {game.visitedCount} / {game.totalTiles}
     <span class="progress-pct">{missionPct.toFixed(0)}%</span>
   </div>
-  <button class="level-btn" onclick={goToLevelSelect}>◄ {game.missionCity || 'Misiones'}</button>
 </div>
 
 <!-- Submarine stats panel (top-left) — hull bar, hexa-turnos ShipStats style. -->
 <div class="stats">
   <div class="stats-title">
+    <button class="home-btn" onclick={goToLevelSelect} title="Volver a Misiones" aria-label="Volver a Misiones">
+      🏠
+    </button>
     <span class="lvl-badge">Nivel {game.level}</span>
     <span class="lvl-diff">{mission.label}</span>
   </div>
@@ -1006,22 +1008,27 @@
     color: #fff;
   }
 
-  /* "Back to levels" button in the arena HUD. */
-  .level-btn {
-    background: rgba(10, 20, 30, 0.65);
+  /* "Back to Misiones" icon button — top-left corner, inside the stats panel. */
+  .home-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 215, 0, 0.12);
     color: #ffd700;
-    border: 1px solid rgba(255, 215, 0, 0.6);
-    border-radius: 8px;
-    padding: 9px 14px;
-    font: 600 13px/1 system-ui, sans-serif;
+    border: 1px solid rgba(255, 215, 0, 0.55);
+    border-radius: 6px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1;
     cursor: pointer;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
     transition: background 0.15s, border-color 0.15s;
   }
-  .level-btn:hover {
-    background: rgba(10, 20, 30, 0.85);
-    border-color: rgba(255, 215, 0, 1);
+  .home-btn:hover {
+    background: rgba(255, 215, 0, 0.26);
+    border-color: rgba(255, 215, 0, 0.9);
   }
 
   /* Enemy health bar — small overlay tracking each enemy's screen position. */
@@ -1120,7 +1127,7 @@
   }
   .stats-title {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
   }
   .lvl-badge {
