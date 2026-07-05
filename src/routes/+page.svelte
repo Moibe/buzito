@@ -34,8 +34,6 @@
   import type { EnemyType } from '$lib/game.svelte';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
 
-  // The current mission's difficulty definition (for the level indicator).
-  const mission = $derived(MISSIONS[game.level - 1] ?? MISSIONS[0]);
   // Campaign progress: the NEXT city picked is played at this level.
   const nextLevel = $derived(Math.min(MISSIONS.length, game.completed.length + 1));
   const nextMission = $derived(MISSIONS[nextLevel - 1]);
@@ -331,7 +329,6 @@
 <div class="stats" style="width: {statsWidth}px">
   <div class="stats-title">
     <span class="lvl-badge">Nivel {game.level}</span>
-    <span class="lvl-diff">{mission.label}</span>
   </div>
   <div class="stat-sub">🎯 {game.missionCity} · Arena {game.arena}/{ARENAS_PER_CITY}</div>
   <div class="stat-row" style="margin-top: 10px;">
@@ -1256,13 +1253,6 @@
     font-size: 15px;
     color: #fff3b8;
     letter-spacing: 0.02em;
-  }
-  .lvl-diff {
-    font-weight: 600;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: rgba(255, 215, 0, 0.7);
   }
   .stat-sub {
     font-size: 12px;
