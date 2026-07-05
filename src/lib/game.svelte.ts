@@ -592,6 +592,11 @@ export function goToSubScreen() {
   game.screen = 'sub';
 }
 
+// Back to the intro screen (clicking the "buzito" title).
+export function goToIntro() {
+  game.screen = 'intro';
+}
+
 // Restart after sinking: fresh hull, back to the arena center, progress
 // cleared. Enemies keep their state (position/active) — the threat remains.
 export function resetGame() {

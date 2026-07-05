@@ -13,6 +13,7 @@
     advanceArena,
     goToLevelSelect,
     goToSubScreen,
+    goToIntro,
     reshuffleMissions,
     ARENAS_PER_CITY,
     SUB_DETAILS,
@@ -79,7 +80,7 @@
 {:else if game.screen === 'sub'}
   <!-- Submarine choice & customization, shown before the city picker. -->
   <div class="subscreen">
-    <h1 class="ls-title">buzito</h1>
+    <button type="button" class="ls-title" title="Volver al inicio" onclick={goToIntro}>buzito</button>
     <p class="ls-sub">Personaliza tu submarino</p>
     <div class="sub-preview">
       <Canvas>
@@ -109,7 +110,7 @@
   <!-- City picker. Pick any city in any order — the Nth you beat is played at
        difficulty N. Beaten cities are marked and locked. -->
   <div class="levelselect">
-    <h1 class="ls-title">buzito</h1>
+    <button type="button" class="ls-title" title="Volver al inicio" onclick={goToIntro}>buzito</button>
     {#if campaignDone}
       <p class="ls-sub">🏆 ¡Campaña completada! Liberaste las 8 ciudades.</p>
     {:else}
@@ -656,10 +657,19 @@
   }
   .ls-title {
     margin: 0;
+    background: none;
+    border: none;
+    padding: 0;
     color: #ffd700;
     font: 800 46px/1 system-ui, sans-serif;
     letter-spacing: 0.08em;
     text-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    transition: text-shadow 0.15s, transform 0.12s;
+  }
+  .ls-title:hover {
+    text-shadow: 0 3px 10px rgba(0, 0, 0, 0.5), 0 0 26px rgba(255, 215, 0, 0.6);
+    transform: scale(1.03);
   }
   .ls-sub {
     margin: 0 0 26px;
