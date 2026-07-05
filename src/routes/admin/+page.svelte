@@ -4,6 +4,7 @@
   import { MISSIONS, ENEMY_INFO, BONUS_INFO } from '$lib/missions';
   import type { BonusType } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
+  import { page } from '$app/state';
   import {
     config,
     setWinPct,
@@ -30,7 +31,14 @@
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   let collapsed = $state(false);
-  let section = $state<'ajustes' | 'ciudades' | 'misiones'>('ajustes');
+  // Initial section can be set via ?sec= (e.g. returning from a city page).
+  const secParam = page.url.searchParams.get('sec');
+  const initialSection = (['ajustes', 'ciudades', 'misiones'] as const).includes(
+    secParam as 'ajustes' | 'ciudades' | 'misiones'
+  )
+    ? (secParam as 'ajustes' | 'ciudades' | 'misiones')
+    : 'ajustes';
+  let section = $state<'ajustes' | 'ciudades' | 'misiones'>(initialSection);
   // Which mission card the dragged enemy is hovering (for the drop highlight).
   let dragOverIndex = $state(-1);
 
@@ -162,13 +170,16 @@
           <h2>Ciudades <span class="count">{data.cities.length}</span></h2>
           <p>Pool maestro de ciudades. Cada partida elige 8 al azar como misiones.</p>
         </header>
+        <p class="cities-hint">Clic en una ciudad para gestionar sus imágenes.</p>
         <ol class="cities">
-          {#each data.cities as city}
+          {#each data.cities as city, i}
             <li>
-              <span class="city-name">{city}</span>
-              {#if cityFlagCode(city)}
-                <span class="flag fi fi-{cityFlagCode(city)}" title={cityCountry(city)} aria-hidden="true"></span>
-              {/if}
+              <a href="/admin/ciudades/{i + 1}">
+                <span class="city-name">{city}</span>
+                {#if cityFlagCode(city)}
+                  <span class="flag fi fi-{cityFlagCode(city)}" title={cityCountry(city)} aria-hidden="true"></span>
+                {/if}
+              </a>
             </li>
           {/each}
         </ol>
@@ -468,6 +479,28 @@
     font-size: 15px;
     border-radius: 2px;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  }
+  .cities li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    text-decoration: none;
+    color: inherit;
+  }
+  .cities li {
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .cities li:hover {
+    border-color: rgba(147, 197, 253, 0.65);
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .cities-hint {
+    margin: 0 0 12px;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.6);
   }
 
   /* --- Settings (Ajustes) --- */
