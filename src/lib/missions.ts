@@ -37,11 +37,27 @@ export const ENEMY_INFO: Record<EnemyType, { name: string; emoji: string; desc: 
 
 // Bonuses = the tile-liberator power-ups, introduced gradually like enemies.
 export type BonusType = 'health' | 'line' | 'xstar' | 'star';
-export const BONUS_INFO: Record<BonusType, { name: string; emoji: string }> = {
-  health: { name: 'Vida', emoji: '💙' },
-  line: { name: 'Línea', emoji: '➖' },
-  xstar: { name: 'X', emoji: '✖️' },
-  star: { name: 'Estrella', emoji: '✳️' },
+export const BONUS_INFO: Record<BonusType, { name: string; emoji: string; desc: string }> = {
+  health: {
+    name: 'Vida',
+    emoji: '💙',
+    desc: 'Orbe de vida: repara tu casco al tocarlo. Los que están sumergidos se recogen buceando a su profundidad.',
+  },
+  line: {
+    name: 'Línea',
+    emoji: '➖',
+    desc: 'Libera de golpe toda una línea de mosaicos en un ángulo. Ideal para descubrir terreno rápido.',
+  },
+  xstar: {
+    name: 'X',
+    emoji: '✖️',
+    desc: 'Libera dos líneas cruzadas en forma de X. Cubre más mosaicos que la línea simple.',
+  },
+  star: {
+    name: 'Estrella',
+    emoji: '✳️',
+    desc: 'Libera un asterisco completo desde donde la tomas: líneas horizontal, vertical y diagonales. La que más descubre.',
+  },
 };
 export type Bonuses = { health: number; line: number; xstar: number; star: number };
 

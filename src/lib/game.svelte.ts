@@ -538,13 +538,15 @@ export const game = $state({
   // menu out from under the cursor).
   menuHover: false,
 
-  // Enemy types the player has already been introduced to (persisted). The
-  // arena-entrance cinematic pauses to explain a type only the FIRST time it's
-  // ever seen; known types just emerge without stopping.
+  // Enemy / bonus types the player has already been introduced to (persisted).
+  // Enemies are explained during the entrance the first time seen; bonuses are
+  // explained the first time the player TOUCHES one. Known ones don't re-explain.
   introducedEnemies: [] as EnemyType[],
-  // While non-null, the entrance is paused presenting a new enemy type: the HUD
-  // shows an explanation card near (sx,sy) and the game waits for "Continuar".
-  introCard: null as { type: EnemyType; sx: number; sy: number } | null,
+  introducedBonuses: [] as BonusType[],
+  // While non-null, the game is paused showing an explanation card near (sx,sy)
+  // for a new enemy (kind:'enemy') or a just-touched new bonus (kind:'bonus');
+  // it waits for "Continuar". `key` is the EnemyType or BonusType.
+  introCard: null as { kind: 'enemy' | 'bonus'; key: string; sx: number; sy: number } | null,
 });
 
 // Restore the per-player name saved on a previous visit.
@@ -583,7 +585,7 @@ export function recordConquered(city: string) {
   }
 }
 
-// Restore which enemy types have already been introduced (per-player).
+// Restore which enemy / bonus types have already been introduced (per-player).
 if (typeof localStorage !== 'undefined') {
   try {
     const v = JSON.parse(localStorage.getItem('buzito.introducedEnemies') || 'null');
@@ -595,17 +597,37 @@ if (typeof localStorage !== 'undefined') {
   } catch {
     /* ignore corrupt value */
   }
+  try {
+    const v = JSON.parse(localStorage.getItem('buzito.introducedBonuses') || 'null');
+    if (Array.isArray(v)) {
+      game.introducedBonuses = [
+        ...new Set(v.filter((x): x is BonusType => typeof x === 'string')),
+      ];
+    }
+  } catch {
+    /* ignore corrupt value */
+  }
 }
 
-// Dismiss the enemy-introduction card ("Continuar"): remember the type as
-// introduced (so it's never explained again) and resume the entrance.
+// Dismiss the explanation card ("Continuar"): remember the enemy/bonus type as
+// introduced (never explained again) and resume. For a bonus, Scene applies the
+// deferred effect once it sees the card cleared.
 export function dismissIntroCard() {
   const card = game.introCard;
   if (!card) return;
-  if (!game.introducedEnemies.includes(card.type)) {
-    game.introducedEnemies.push(card.type);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('buzito.introducedEnemies', JSON.stringify(game.introducedEnemies));
+  if (card.kind === 'enemy') {
+    if (!game.introducedEnemies.includes(card.key as EnemyType)) {
+      game.introducedEnemies.push(card.key as EnemyType);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('buzito.introducedEnemies', JSON.stringify(game.introducedEnemies));
+      }
+    }
+  } else {
+    if (!game.introducedBonuses.includes(card.key as BonusType)) {
+      game.introducedBonuses.push(card.key as BonusType);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('buzito.introducedBonuses', JSON.stringify(game.introducedBonuses));
+      }
     }
   }
   game.introCard = null;

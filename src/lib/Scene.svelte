@@ -24,6 +24,7 @@
   import LineStar from './LineStar.svelte';
   import Tracers from './Tracers.svelte';
   import { axialToWorld, worldToAxial, axialRound, buildBoardIsoRect } from './hex';
+  import type { BonusType } from './missions';
   import {
     game,
     flipDelays,
@@ -175,11 +176,36 @@
   const bonusEmerge = $derived(appearAmt(INTRO_BONUS_START));
   // True once the whole entrance is over — gates helm/clicks/etc.
   const introDone = $derived(introElapsed >= INTRO_END);
+  // The player may act only once the entrance is over AND no card is up.
+  const interactive = $derived(introDone && game.introCard === null);
 
-  // --- "New enemy" presentation: the first time a type is ever seen, the
-  // entrance pauses on it with an explanation card (see game.introCard). ---
-  const presentedThisRun = new Set<string>(); // types already presented this arena
-  let presentedId = $state<string | null>(null); // enemy id being highlighted
+  // --- Explanation cards: the first time an enemy TYPE is seen (during the
+  // entrance) or a bonus TYPE is TOUCHED, pause on it with a card + highlight
+  // ring (see game.introCard). ---
+  const presentedThisRun = new Set<string>(); // enemy types already presented this arena
+  const presentedBonusThisRun = new Set<string>(); // bonus types presented this arena
+  let highlightPos = $state<{ x: number; z: number } | null>(null); // ring anchor
+  // A first-touched bonus whose effect is deferred until its card is dismissed.
+  let pendingBonus: { type: BonusType; x: number; z: number; angle: number } | null = null;
+
+  // Project a world point to a clamped on-screen anchor for its card.
+  function cardAnchor(x: number, z: number): { sx: number; sy: number } {
+    let sx = window.innerWidth / 2;
+    let sy = window.innerHeight * 0.42;
+    if (cam) {
+      projScratch.set(x, 0, z).project(cam);
+      sx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
+      sy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
+    }
+    // Card sits to the right of, and centered on, the point; margins collapse
+    // toward center on tiny viewports so the clamp bounds never invert.
+    const xRight = Math.max(16, window.innerWidth - 340);
+    const yMargin = Math.min(120, window.innerHeight / 2);
+    sx = Math.max(16, Math.min(xRight, sx));
+    sy = Math.max(yMargin, Math.min(window.innerHeight - yMargin, sy));
+    return { sx, sy };
+  }
+
   // When an as-yet-unseen enemy finishes emerging, pause and show its card.
   function maybePresentEnemy() {
     for (let i = 0; i < introEnemyCount; i++) {
@@ -189,29 +215,48 @@
       const finish = INTRO_ENEMIES_START + i * ENEMY_STAGGER + APPEAR_DUR;
       if (introElapsed >= finish) {
         presentedThisRun.add(e.type);
-        presentEnemy(i, e.id);
+        const m = movers[e.id];
+        if (m) highlightPos = { x: m.x, z: m.z };
+        const { sx, sy } = cardAnchor(m ? m.x : 0, m ? m.z : 0);
+        game.introCard = { kind: 'enemy', key: e.type, sx, sy };
         return;
       }
     }
   }
-  function presentEnemy(index: number, id: string) {
-    const m = movers[id];
-    let sx = window.innerWidth / 2;
-    let sy = window.innerHeight * 0.42;
-    if (cam && m) {
-      projScratch.set(m.x, 0, m.z).project(cam);
-      sx = (projScratch.x * 0.5 + 0.5) * window.innerWidth;
-      sy = (-projScratch.y * 0.5 + 0.5) * window.innerHeight;
+
+  // Apply a bonus's actual effect (heal / liberate). Deferred to Continue on the
+  // first-ever touch of a type, immediate afterwards.
+  function applyBonusEffect(b: { type: BonusType; x: number; z: number; angle: number }) {
+    if (b.type === 'health') {
+      healSub(config.rules.heal);
+    } else if (b.type === 'star') {
+      liberateAsterisk(b.x, b.z);
+      spawnBlastVisual(b.x, b.z);
+      game.healFlash = Math.max(game.healFlash, 0.6);
+    } else if (b.type === 'xstar') {
+      liberateX(b.x, b.z, b.angle);
+      spawnBlastVisual(b.x, b.z);
+    } else if (b.type === 'line') {
+      liberateLine(b.x, b.z, b.angle);
+      spawnBlastVisual(b.x, b.z);
     }
-    // Keep the card on-screen (it sits to the right of, and centered on, the
-    // point). Margins collapse toward center on tiny viewports so the clamp
-    // bounds never invert.
-    const xRight = Math.max(16, window.innerWidth - 340);
-    const yMargin = Math.min(120, window.innerHeight / 2);
-    sx = Math.max(16, Math.min(xRight, sx));
-    sy = Math.max(yMargin, Math.min(window.innerHeight - yMargin, sy));
-    presentedId = id;
-    game.introCard = { type: game.enemies[index].type, sx, sy };
+  }
+
+  // Collect a touched bonus. Returns true if it was consumed this frame. On the
+  // FIRST touch of a type, defer the effect and show a card (pausing the game);
+  // otherwise apply immediately. Skips if a card is already up this frame.
+  function collectBonus(type: BonusType, x: number, z: number, angle: number): boolean {
+    if (game.introCard) return false;
+    if (game.introducedBonuses.includes(type) || presentedBonusThisRun.has(type)) {
+      applyBonusEffect({ type, x, z, angle });
+      return true;
+    }
+    presentedBonusThisRun.add(type);
+    pendingBonus = { type, x, z, angle };
+    highlightPos = { x, z };
+    const { sx, sy } = cardAnchor(x, z);
+    game.introCard = { kind: 'bonus', key: type, sx, sy };
+    return true;
   }
 
   // --- The arena (the game world) ---
@@ -374,8 +419,8 @@
           e.preventDefault();
           break;
         case ' ':
-          // Ignored during the arena-entrance cinematic (sub not yet in control).
-          if (!e.repeat && introElapsed >= INTRO_END) {
+          // Ignored during the entrance cinematic or while a card is up.
+          if (!e.repeat && interactive) {
             coverCurrentTile();
             toggleSubmerged();
           }
@@ -437,14 +482,21 @@
     // frame, so the main loop below reads the up-to-date value). Frozen while a
     // "new enemy" card is up so the presentation waits for "Continuar".
     const introPaused = game.introCard !== null;
+    if (!introPaused) {
+      // Card just dismissed (or none up): apply any deferred first-touch bonus
+      // effect and drop the highlight ring.
+      if (pendingBonus) {
+        if (!game.gameOver) applyBonusEffect(pendingBonus); // don't heal/liberate a dead/reset sub
+        pendingBonus = null;
+      }
+      if (highlightPos !== null) highlightPos = null;
+    }
     if (!introPaused && introElapsed < INTRO_END) {
       introElapsed += delta;
       maybePresentEnemy();
     }
-    // Drop the highlight once the card has been dismissed.
-    if (!introPaused && presentedId !== null) presentedId = null;
     // A sunk sub doesn't answer the helm; nor does it during the entrance
-    // cinematic — controls freeze until the sub has emerged and the intro ends.
+    // cinematic or while an explanation card is up — controls freeze.
     const alive = !game.gameOver && introDone && !introPaused;
     // "Mayor velocidad" ability: multiply the base speed while enabled. Guard
     // mult > 0 so an emptied/zeroed panel field (yields null) can't freeze the
@@ -1184,10 +1236,10 @@
 
   const projScratch = new Vector3();
   useTask((delta) => {
-    // Frozen while the arena entrance cinematic plays: actors are emerging, so
-    // suppress all simulation (helm is frozen in the physics loop above). Bonus
-    // SPAWN still runs so they exist to emerge; only COLLECTION is gated.
-    const frozen = introElapsed < INTRO_END;
+    // Frozen while the entrance cinematic plays OR while an explanation card is
+    // up: suppress all simulation (helm is frozen in the physics loop above).
+    // Bonus SPAWN still runs; only COLLECTION is gated.
+    const frozen = introElapsed < INTRO_END || game.introCard !== null;
 
     // --- Player missiles: fire with M while the ability is on (auto-repeats at
     // the configured interval while held). ---
@@ -1466,7 +1518,7 @@
     // --- Advance tracers (hit the surfaced sub, OR any enemy in the line of
     // fire except the shooter — friendly fire). ---
     for (const t of tracers) {
-      if (!t.active) continue;
+      if (!t.active || frozen) continue; // frozen: in-flight rounds pause, don't hit
       t.x += t.vx * delta;
       t.z += t.vz * delta;
       t.age += delta;
@@ -1514,7 +1566,7 @@
 
     // --- Advance bombs (parabolic arc) → explode on landing ---
     for (const b of bombs) {
-      if (!b.active) continue;
+      if (!b.active || frozen) continue; // frozen: bombs hang mid-arc, don't land
       b.t += delta;
       if (b.t >= BOMB_FLIGHT) {
         b.active = false;
@@ -1531,7 +1583,7 @@
     // --- Advance torpedoes: straight line until they exit the arena; hit the
     // sub only when it's SUBMERGED and in the path. ---
     for (const t of torpedoes) {
-      if (!t.active) continue;
+      if (!t.active || frozen) continue; // frozen: torpedoes pause, don't strike
       t.x += t.vx * delta;
       t.z += t.vz * delta;
       // Expire at the arena frame (a rectangle in the rotated u/v frame), NOT
@@ -1555,7 +1607,7 @@
     // --- Advance player missiles: straight line; damage the first enemy in
     // range (any depth), then expire. Also expire at the arena frame. ---
     for (const mi of missiles) {
-      if (!mi.active) continue;
+      if (!mi.active || frozen) continue; // frozen: player missiles pause too
       mi.x += mi.vx * delta;
       mi.z += mi.vz * delta;
       const mu = (mi.x - mi.z) * Math.SQRT1_2;
@@ -1581,7 +1633,7 @@
     // --- Mines: floating contact hazards. Detonate on contact with the sub at
     // ANY depth (above or below), damaging it and clearing that mine (which
     // frees a slot for the minelayer to lay another). ---
-    if (!game.gameOver) {
+    if (!game.gameOver && !frozen) {
       for (const mn of mines) {
         if (!mn.active) continue;
         const dx = mn.x - game.x;
@@ -1616,8 +1668,7 @@
           const dx = p.x - game.x;
           const dz = p.z - game.z;
           if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
-            p.active = false;
-            healSub(config.rules.heal);
+            if (collectBonus('health', p.x, p.z, 0)) p.active = false;
           }
         }
         if (!pickups.some((p) => p.active)) pickupRespawnTimer = config.rules.respawn.health;
@@ -1636,10 +1687,7 @@
           const dx = s.x - game.x;
           const dz = s.z - game.z;
           if (dx * dx + dz * dz < STAR_RADIUS2) {
-            s.active = false;
-            liberateAsterisk(s.x, s.z);
-            spawnBlastVisual(s.x, s.z);
-            game.healFlash = Math.max(game.healFlash, 0.6); // brief golden-ish flash
+            if (collectBonus('star', s.x, s.z, 0)) s.active = false;
           }
         }
         if (!stars.some((s) => s.active)) starRespawnTimer = config.rules.respawn.star;
@@ -1658,9 +1706,7 @@
           const dx = s.x - game.x;
           const dz = s.z - game.z;
           if (dx * dx + dz * dz < STAR_RADIUS2) {
-            s.active = false;
-            liberateX(s.x, s.z, s.angle);
-            spawnBlastVisual(s.x, s.z);
+            if (collectBonus('xstar', s.x, s.z, s.angle)) s.active = false;
           }
         }
         if (!xstars.some((s) => s.active)) xstarRespawnTimer = config.rules.respawn.xstar;
@@ -1679,9 +1725,7 @@
           const dx = s.x - game.x;
           const dz = s.z - game.z;
           if (dx * dx + dz * dz < STAR_RADIUS2) {
-            s.active = false;
-            liberateLine(s.x, s.z, s.angle);
-            spawnBlastVisual(s.x, s.z);
+            if (collectBonus('line', s.x, s.z, s.angle)) s.active = false;
           }
         }
         if (!linestars.some((s) => s.active)) linestarRespawnTimer = config.rules.respawn.line;
@@ -1698,6 +1742,7 @@
       !game.won &&
       !game.gameOver &&
       !frozen &&
+      game.introCard === null &&
       game.totalTiles > 0 &&
       game.visitedCount / game.totalTiles >= config.rules.winPct
     ) {
@@ -1824,27 +1869,26 @@
     {@const ea = appearAmt(INTRO_ENEMIES_START + i * ENEMY_STAGGER)}
     <T.Group position={[0, (ea - 1) * EMERGE_DEPTH, 0]}>
       {#if e.type === 'warship'}
-        <Warship x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+        <Warship x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => interactive && selectEnemy(e.id)} />
       {:else if e.type === 'cargo'}
-        <Cargo x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+        <Cargo x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => interactive && selectEnemy(e.id)} />
       {:else if e.type === 'bomber'}
-        <Bomber x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+        <Bomber x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => interactive && selectEnemy(e.id)} />
       {:else if e.type === 'submarineIx'}
-        <SubmarineIX x={m.x} z={m.z} heading={m.heading} moving={m.moving} submerged={m.submerged} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+        <SubmarineIX x={m.x} z={m.z} heading={m.heading} moving={m.moving} submerged={m.submerged} scale={SUB_SCALE * ea} onclick={() => interactive && selectEnemy(e.id)} />
       {:else if e.type === 'shark'}
-        <Shark x={m.x} z={m.z} heading={m.heading} moving={m.moving} submerged={m.submerged} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+        <Shark x={m.x} z={m.z} heading={m.heading} moving={m.moving} submerged={m.submerged} scale={SUB_SCALE * ea} onclick={() => interactive && selectEnemy(e.id)} />
       {:else if e.type === 'minelayer'}
-        <Minelayer x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => introDone && selectEnemy(e.id)} />
+        <Minelayer x={m.x} z={m.z} heading={m.heading} moving={m.moving} scale={SUB_SCALE * ea} onclick={() => interactive && selectEnemy(e.id)} />
       {/if}
     </T.Group>
   {/if}
 {/each}
 
-<!-- Highlight ring under the enemy being introduced (pulses while its card is up). -->
-{#if game.introCard && presentedId && movers[presentedId]}
-  {@const hm = movers[presentedId]}
+<!-- Highlight ring under the actor being explained (pulses while its card is up). -->
+{#if game.introCard && highlightPos}
   {@const rp = SUB_SCALE * (1.1 + 0.12 * pickupPulse)}
-  <T.Mesh position={[hm.x, 0.5, hm.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[rp, rp, rp]}>
+  <T.Mesh position={[highlightPos.x, 0.5, highlightPos.z]} rotation={[-Math.PI / 2, 0, 0]} scale={[rp, rp, rp]}>
     <T.RingGeometry args={[0.72, 0.96, 40]} />
     <T.MeshBasicMaterial color="#ffd700" transparent opacity={0.75} depthWrite={false} toneMapped={false} />
   </T.Mesh>

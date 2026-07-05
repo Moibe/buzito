@@ -26,7 +26,9 @@
   import SubPreview from '$lib/SubPreview.svelte';
   import IntroScene from '$lib/IntroScene.svelte';
   import CityThumb from '$lib/CityThumb.svelte';
-  import { MISSIONS, ENEMY_INFO } from '$lib/missions';
+  import { MISSIONS, ENEMY_INFO, BONUS_INFO } from '$lib/missions';
+  import type { BonusType } from '$lib/missions';
+  import type { EnemyType } from '$lib/game.svelte';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
 
   // The current mission's difficulty definition (for the level indicator).
@@ -276,7 +278,7 @@
   <div class="stat-sub">🎯 {game.missionCity} · Arena {game.arena}/{ARENAS_PER_CITY}</div>
   <div class="stat-row" style="margin-top: 10px;">
     <span class="stat-label">Casco</span>
-    <span class="stat-value">{game.hp}/{config.sub.hp}</span>
+    <span class="stat-value">{Math.max(0, Math.round(game.hp))}/{Math.round(config.sub.hp)}</span>
   </div>
   <div class="stat-bar">
     <div class="stat-bar-fill hp" style="width: {hpPct}%"></div>
@@ -318,12 +320,14 @@
   </div>
 {/if}
 
-<!-- "New enemy" presentation card — shown during the arena entrance the first
-     time a type is ever seen; anchored next to the highlighted enemy. -->
+<!-- Explanation card — a NEW ENEMY (first seen, during the entrance) or a NEW
+     BONUS (first touched); anchored next to the highlighted actor. -->
 {#if game.introCard}
-  {@const info = ENEMY_INFO[game.introCard.type]}
-  <div class="enemy-intro" style="left: {game.introCard.sx}px; top: {game.introCard.sy}px;">
-    <span class="ei-tag">¡Nuevo enemigo!</span>
+  {@const card = game.introCard}
+  {@const info =
+    card.kind === 'enemy' ? ENEMY_INFO[card.key as EnemyType] : BONUS_INFO[card.key as BonusType]}
+  <div class="enemy-intro" style="left: {card.sx}px; top: {card.sy}px;">
+    <span class="ei-tag">{card.kind === 'enemy' ? '¡Nuevo enemigo!' : '¡Nuevo poder!'}</span>
     <div class="ei-head">
       <span class="ei-emoji">{info.emoji}</span>
       <strong>{info.name}</strong>
