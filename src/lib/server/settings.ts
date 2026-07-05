@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { MISSIONS, ENEMY_INFO, BONUS_INFO } from '$lib/missions';
-import type { Bonuses } from '$lib/missions';
+import type { Bonuses, BonusType } from '$lib/missions';
 import type { EnemyType } from '$lib/game.svelte';
 
 // Server-side, file-backed store for the settings the admin edits, so they
@@ -9,13 +9,21 @@ import type { EnemyType } from '$lib/game.svelte';
 // data/settings.json under the app's working dir (survives restarts; on the
 // droplet it lives outside the build output).
 export type MissionEnemies = { type: EnemyType; count: number }[][];
-export type Settings = { winPct: number; missionEnemies: MissionEnemies; missionBonuses: Bonuses[] };
+export type Settings = {
+  winPct: number;
+  heal: number;
+  respawn: Record<BonusType, number>;
+  missionEnemies: MissionEnemies;
+  missionBonuses: Bonuses[];
+};
 
 const FILE = join(process.cwd(), 'data', 'settings.json');
 
 function base(): Settings {
   return {
     winPct: 0.9,
+    heal: 12,
+    respawn: { health: 180, line: 25, xstar: 25, star: 25 },
     missionEnemies: MISSIONS.map((m) => m.enemies.map((e) => ({ type: e.type, count: e.count }))),
     missionBonuses: MISSIONS.map((m) => ({ ...m.bonuses })),
   };
@@ -53,11 +61,28 @@ function validMissionBonuses(v: unknown): v is Bonuses[] {
   return true;
 }
 
+function validRespawn(v: unknown): v is Record<BonusType, number> {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(BONUS_INFO)) {
+    if (typeof o[k] !== 'number' || (o[k] as number) <= 0) return false;
+  }
+  return true;
+}
+
 // Keep only well-formed, in-range fields from arbitrary input.
 function sanitize(v: unknown): Partial<Settings> {
   const out: Partial<Settings> = {};
-  const o = (v ?? {}) as { winPct?: unknown; missionEnemies?: unknown; missionBonuses?: unknown };
+  const o = (v ?? {}) as {
+    winPct?: unknown;
+    heal?: unknown;
+    respawn?: unknown;
+    missionEnemies?: unknown;
+    missionBonuses?: unknown;
+  };
   if (typeof o.winPct === 'number' && o.winPct > 0 && o.winPct <= 1) out.winPct = o.winPct;
+  if (typeof o.heal === 'number' && o.heal >= 0) out.heal = o.heal;
+  if (validRespawn(o.respawn)) out.respawn = o.respawn;
   if (validMissionEnemies(o.missionEnemies)) out.missionEnemies = o.missionEnemies;
   if (validMissionBonuses(o.missionBonuses)) out.missionBonuses = o.missionBonuses;
   return out;

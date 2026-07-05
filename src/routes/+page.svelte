@@ -278,19 +278,8 @@
       <label class="knob"><span>Daño mina</span><input type="number" step="1" min="0" bind:value={config.enemies.minelayer.mineDamage} /></label>
       <label class="knob"><span>Máx. minas</span><input type="number" step="1" min="1" max="16" bind:value={config.enemies.minelayer.maxMines} /></label>
 
-      <div class="cfg-sec">Esferas de vida</div>
-      <label class="knob"><span>Curación</span><input type="number" step="1" min="0" bind:value={config.pickup.heal} /></label>
-      <label class="knob"><span>Reaparición (s)</span><input type="number" step="10" min="5" bind:value={config.pickup.respawn} /></label>
-
-      <!-- Bonus COUNTS are per-mission (Admin › Misiones); here only respawn. -->
-      <div class="cfg-sec">Estrellas (asterisco)</div>
-      <label class="knob"><span>Reaparición (s)</span><input type="number" step="5" min="1" bind:value={config.stars.respawn} /></label>
-
-      <div class="cfg-sec">X (diagonales)</div>
-      <label class="knob"><span>Reaparición (s)</span><input type="number" step="5" min="1" bind:value={config.xstars.respawn} /></label>
-
-      <div class="cfg-sec">Línea</div>
-      <label class="knob"><span>Reaparición (s)</span><input type="number" step="5" min="1" bind:value={config.linestars.respawn} /></label>
+      <!-- Los bonos (curación + reaparición de vida/línea/X/estrella) ahora se
+           controlan en Admin › Ajustes (persistidos en el servidor). -->
 
       <button class="cfg-regen" onclick={respawnEnemies}>♻ Regenerar enemigos (aplica casco)</button>
     </div>

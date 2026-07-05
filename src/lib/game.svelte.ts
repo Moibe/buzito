@@ -51,19 +51,19 @@ function baseMissionBonuses(): Bonuses[] {
 export const config = $state({
   sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
   // Game rules the admin edits in "Ajustes" (persisted server-side so the
-  // change reaches every player). winPct = fraction of tiles to cover to win.
-  rules: { winPct: 0.9 },
+  // change reaches every player). winPct = fraction of tiles to cover to win;
+  // heal = health per orb; respawn = seconds until a new wave of each bonus
+  // after its previous wave is cleared.
+  rules: {
+    winPct: 0.9,
+    heal: 12,
+    respawn: { health: 180, line: 25, xstar: 25, star: 25 } as Record<BonusType, number>,
+  },
   // Editable per-mission enemy composition (admin drag-to-add). Starts as the
   // base table; persisted so edits reach the game.
   missionEnemies: baseMissionEnemies(),
   // Editable per-mission bonus (power-up) counts. Admin-controlled + persisted.
   missionBonuses: baseMissionBonuses(),
-  pickup: { heal: 12, respawn: 180 },
-  // Power-up respawn delays (seconds). The per-mission COUNTS live in
-  // config.missionBonuses; here we keep only the shared respawn cadence.
-  stars: { respawn: 25 },
-  xstars: { respawn: 25 },
-  linestars: { respawn: 25 },
   // --- Player sub upgrades/abilities (the LEFT tuning panel binds to this).
   // Each has an `enabled` toggle so they can be switched on/off to test. ---
   player: {
@@ -142,13 +142,34 @@ function isValidMissionBonuses(v: unknown): v is Bonuses[] {
   return true;
 }
 
+// Validate a respawn map ({health,line,xstar,star} → positive seconds).
+function isValidRespawn(v: unknown): v is Record<BonusType, number> {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(BONUS_INFO)) {
+    if (typeof o[k] !== 'number' || (o[k] as number) <= 0) return false;
+  }
+  return true;
+}
+
 // Apply settings coming from the SERVER (the source of truth, loaded via the
 // root layout). Validated before use.
 export function applyServerSettings(
-  s: { winPct?: unknown; missionEnemies?: unknown; missionBonuses?: unknown } | null | undefined
+  s:
+    | {
+        winPct?: unknown;
+        heal?: unknown;
+        respawn?: unknown;
+        missionEnemies?: unknown;
+        missionBonuses?: unknown;
+      }
+    | null
+    | undefined
 ) {
   if (!s) return;
   if (typeof s.winPct === 'number' && s.winPct > 0 && s.winPct <= 1) config.rules.winPct = s.winPct;
+  if (typeof s.heal === 'number' && s.heal >= 0) config.rules.heal = s.heal;
+  if (isValidRespawn(s.respawn)) config.rules.respawn = s.respawn;
   if (isValidMissionEnemies(s.missionEnemies)) config.missionEnemies = s.missionEnemies;
   if (isValidMissionBonuses(s.missionBonuses)) config.missionBonuses = s.missionBonuses;
 }
@@ -171,6 +192,8 @@ async function saveSettingsToServer() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         winPct: config.rules.winPct,
+        heal: config.rules.heal,
+        respawn: config.rules.respawn,
         missionEnemies: config.missionEnemies,
         missionBonuses: config.missionBonuses,
       }),
@@ -186,6 +209,19 @@ async function saveSettingsToServer() {
 export function setWinPct(pct: number) {
   const v = Math.max(0.01, Math.min(1, (Number(pct) || 0) / 100));
   config.rules.winPct = v;
+  saveSettingsToServer();
+}
+
+// Health restored per orb.
+export function setHeal(v: number) {
+  config.rules.heal = Math.max(0, Number(v) || 0);
+  saveSettingsToServer();
+}
+
+// Respawn delay (seconds) for a bonus type's next wave.
+export function setRespawn(type: BonusType, v: number) {
+  if (!(type in config.rules.respawn)) return;
+  config.rules.respawn[type] = Math.max(1, Number(v) || 1);
   saveSettingsToServer();
 }
 

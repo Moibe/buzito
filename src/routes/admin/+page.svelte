@@ -11,6 +11,8 @@
     removeEnemyFromMission,
     resetMissions,
     adjustMissionBonus,
+    setHeal,
+    setRespawn,
     adminSync,
   } from '$lib/game.svelte';
 
@@ -114,6 +116,43 @@
               <span class="unit">%</span>
             </div>
           </div>
+
+          <div class="setting">
+            <div class="setting-label">
+              <strong>💙 Curación por orbe</strong>
+              <span>Puntos de casco que restaura cada orbe de vida.</span>
+            </div>
+            <div class="setting-input">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={config.rules.heal}
+                onchange={(e) => setHeal(Number(e.currentTarget.value))}
+              />
+              <span class="unit">hp</span>
+            </div>
+          </div>
+
+          <div class="setting-group-title">Reaparición de bonos (segundos tras limpiar la tanda)</div>
+          {#each BONUS_LIST as [type, info]}
+            <div class="setting">
+              <div class="setting-label">
+                <strong>{info.emoji} {info.name}</strong>
+              </div>
+              <div class="setting-input">
+                <input
+                  type="number"
+                  min="1"
+                  step="5"
+                  value={config.rules.respawn[type]}
+                  onchange={(e) => setRespawn(type, Number(e.currentTarget.value))}
+                />
+                <span class="unit">s</span>
+              </div>
+            </div>
+          {/each}
+
           {#if adminSync.status !== 'idle'}
             <span class="save-status {adminSync.status}">{saveText[adminSync.status]}</span>
           {/if}
@@ -484,6 +523,16 @@
   .setting-input .unit {
     color: rgba(255, 255, 255, 0.7);
     font-weight: 700;
+  }
+  .setting-group-title {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.55);
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
+    padding-bottom: 6px;
   }
 
   /* Save-status indicator (server persistence feedback). */

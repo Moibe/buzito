@@ -1434,10 +1434,10 @@
           const dz = p.z - game.z;
           if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
             p.active = false;
-            healSub(config.pickup.heal);
+            healSub(config.rules.heal);
           }
         }
-        if (!pickups.some((p) => p.active)) pickupRespawnTimer = config.pickup.respawn;
+        if (!pickups.some((p) => p.active)) pickupRespawnTimer = config.rules.respawn.health;
       }
     } else if (!game.gameOver && bonuses.health > 0) {
       pickupRespawnTimer -= delta;
@@ -1459,7 +1459,7 @@
             game.healFlash = Math.max(game.healFlash, 0.6); // brief golden-ish flash
           }
         }
-        if (!stars.some((s) => s.active)) starRespawnTimer = config.stars.respawn;
+        if (!stars.some((s) => s.active)) starRespawnTimer = config.rules.respawn.star;
       }
     } else if (!game.gameOver && bonuses.star > 0) {
       starRespawnTimer -= delta;
@@ -1480,7 +1480,7 @@
             spawnBlastVisual(s.x, s.z);
           }
         }
-        if (!xstars.some((s) => s.active)) xstarRespawnTimer = config.xstars.respawn;
+        if (!xstars.some((s) => s.active)) xstarRespawnTimer = config.rules.respawn.xstar;
       }
     } else if (!game.gameOver && bonuses.xstar > 0) {
       xstarRespawnTimer -= delta;
@@ -1501,7 +1501,7 @@
             spawnBlastVisual(s.x, s.z);
           }
         }
-        if (!linestars.some((s) => s.active)) linestarRespawnTimer = config.linestars.respawn;
+        if (!linestars.some((s) => s.active)) linestarRespawnTimer = config.rules.respawn.line;
       }
     } else if (!game.gameOver && bonuses.line > 0) {
       linestarRespawnTimer -= delta;
