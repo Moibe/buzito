@@ -647,6 +647,18 @@ if (typeof localStorage !== 'undefined') {
   if (localStorage.getItem('buzito.introducedSub') === 'true') game.introducedSub = true;
 }
 
+// Re-open the submarine how-to-play walkthrough on demand (help button). Shows
+// it centered and pauses the game (via game.introCard) until dismissed. No-op if
+// a card is already up.
+export function openSubIntro() {
+  if (game.introCard) return;
+  const w = typeof window !== 'undefined' ? window.innerWidth : 800;
+  const h = typeof window !== 'undefined' ? window.innerHeight : 600;
+  const sx = Math.max(16, Math.min(w - 340, w / 2 - 174));
+  const sy = Math.max(120, Math.min(h - 120, h / 2));
+  game.introCard = { kind: 'sub', key: 'sub', sx, sy, step: 0 };
+}
+
 // Advance the explanation card. The submarine walkthrough steps through
 // SUB_INTRO with "Siguiente"; the last step (and single-step enemy/bonus
 // cards) close via dismissIntroCard.

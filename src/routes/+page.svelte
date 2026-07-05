@@ -23,6 +23,7 @@
     setSubDetail,
     setPlayerName,
     nextIntroCard,
+    openSubIntro,
   } from '$lib/game.svelte';
   import SubPreview from '$lib/SubPreview.svelte';
   import IntroScene from '$lib/IntroScene.svelte';
@@ -302,6 +303,9 @@
     <span class="progress-count">{game.visitedCount} / {game.totalTiles}</span>
   </div>
 </div>
+
+<!-- Help: re-open the submarine how-to-play walkthrough at any time. -->
+<button class="help-btn" onclick={openSubIntro} title="¿Cómo jugar?" aria-label="Cómo jugar">?</button>
 
 <!-- Submarine stats panel (top-left) — hull bar, hexa-turnos ShipStats style. -->
 <div class="stats">
@@ -1104,6 +1108,34 @@
   .home-btn:hover {
     background: rgba(255, 215, 0, 0.26);
     border-color: rgba(255, 215, 0, 0.9);
+  }
+
+  /* Help button — reopens the submarine how-to-play at any time (bottom-left). */
+  .help-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 12;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 20, 30, 0.72);
+    color: #ffd700;
+    border: 1px solid rgba(255, 215, 0, 0.55);
+    border-radius: 50%;
+    font: 800 20px/1 system-ui, sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .help-btn:hover {
+    background: rgba(20, 45, 68, 0.9);
+    border-color: rgba(255, 215, 0, 0.95);
+    transform: translateY(-1px);
   }
 
   /* Enemy health bar — small overlay tracking each enemy's screen position. */
