@@ -27,7 +27,6 @@
   import {
     game,
     toggleSubmerged,
-    markCurrentTile,
     selectEnemy,
     closeEnemyMenu,
     damageSub,
@@ -313,7 +312,7 @@
           break;
         case ' ':
           if (!e.repeat) {
-            markCurrentTile();
+            coverCurrentTile();
             toggleSubmerged();
           }
           e.preventDefault();
@@ -954,6 +953,32 @@
     if (boardKeys.has(key) && !game.visited.has(key)) {
       game.visited.add(key);
       game.visitedCount++;
+    }
+  }
+  // Mark a tile by axial (q,r) directly — guarded to REAL cells so visitedCount
+  // stays honest (off-board keys are ignored). Used to cover the sub's tile and,
+  // in "Modo Amplio", its 6 hex neighbors.
+  function markTileAxial(q: number, r: number) {
+    const key = `${q},${r}`;
+    if (boardKeys.has(key) && !game.visited.has(key)) {
+      game.visited.add(key);
+      game.visitedCount++;
+    }
+  }
+  // The 6 immediate pointy-top hex neighbors (axial deltas).
+  const HEX_NEIGHBORS: [number, number][] = [
+    [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1],
+  ];
+  // Cover the tile under the sub (+ its 6 neighbors when Modo Amplio is on).
+  // Goes through the boardKeys-guarded marker: near the arena edge the sub's
+  // snapped tile can resolve OFF-board (clamp margin < hex circumradius), and an
+  // unguarded mark would inflate visitedCount and win below the set coverage.
+  function coverCurrentTile() {
+    const q = game.currentTileQ;
+    const r = game.currentTileR;
+    markTileAxial(q, r);
+    if (config.rules.wideMode) {
+      for (const [dq, dr] of HEX_NEIGHBORS) markTileAxial(q + dq, r + dr);
     }
   }
   // Walk each ray direction (world XZ) from (sx,sz), snapping to the nearest hex

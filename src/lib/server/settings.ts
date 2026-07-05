@@ -16,6 +16,8 @@ export type Settings = {
   winPct: number;
   heal: number;
   respawn: Record<BonusType, number>;
+  // "Modo Amplio": covering a tile also covers its 6 hex neighbors.
+  wideMode: boolean;
   missionEnemies: MissionEnemies;
   missionBonuses: Bonuses[];
   // Raw config knobs, present only once the admin has saved them (so a player's
@@ -32,6 +34,7 @@ function base(): Settings {
     winPct: 0.9,
     heal: 12,
     respawn: { health: 180, line: 25, xstar: 50, star: 75 },
+    wideMode: false,
     missionEnemies: MISSIONS.map((m) => m.enemies.map((e) => ({ type: e.type, count: e.count }))),
     missionBonuses: MISSIONS.map((m) => ({ ...m.bonuses })),
   };
@@ -102,6 +105,7 @@ function sanitize(v: unknown): Partial<Settings> {
     winPct?: unknown;
     heal?: unknown;
     respawn?: unknown;
+    wideMode?: unknown;
     missionEnemies?: unknown;
     missionBonuses?: unknown;
     sub?: unknown;
@@ -111,6 +115,7 @@ function sanitize(v: unknown): Partial<Settings> {
   if (typeof o.winPct === 'number' && o.winPct > 0 && o.winPct <= 1) out.winPct = o.winPct;
   if (typeof o.heal === 'number' && o.heal >= 0) out.heal = o.heal;
   if (validRespawn(o.respawn)) out.respawn = o.respawn;
+  if (typeof o.wideMode === 'boolean') out.wideMode = o.wideMode;
   if (validMissionEnemies(o.missionEnemies)) out.missionEnemies = o.missionEnemies;
   if (validMissionBonuses(o.missionBonuses)) out.missionBonuses = o.missionBonuses;
   const sub = numericTree(o.sub);

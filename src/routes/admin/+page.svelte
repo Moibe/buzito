@@ -14,6 +14,7 @@
     adjustMissionBonus,
     setHeal,
     setRespawn,
+    setWideMode,
     saveConfig,
     adminSync,
   } from '$lib/game.svelte';
@@ -140,6 +141,21 @@
                 onchange={(e) => setHeal(Number(e.currentTarget.value))}
               />
               <span class="unit">hp</span>
+            </div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-label">
+              <strong>🌐 Modo Amplio</strong>
+              <span>Al cubrir un mosaico, cubre también sus 6 vecinos — las misiones se completan mucho más rápido.</span>
+            </div>
+            <div class="setting-input">
+              <input
+                class="setting-check"
+                type="checkbox"
+                checked={config.rules.wideMode}
+                onchange={(e) => setWideMode(e.currentTarget.checked)}
+              />
             </div>
           </div>
 
@@ -687,6 +703,14 @@
   .setting-input .unit {
     color: rgba(255, 255, 255, 0.7);
     font-weight: 700;
+  }
+  /* Boolean toggle (Modo Amplio) — a plain accent checkbox, not a number box. */
+  .setting-input input.setting-check {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    accent-color: #ffd700;
+    cursor: pointer;
   }
   .setting-group-title {
     margin-top: 8px;

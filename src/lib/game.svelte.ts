@@ -79,6 +79,9 @@ export const config = $state({
     winPct: 0.9,
     heal: 12,
     respawn: { health: 180, line: 25, xstar: 50, star: 75 } as Record<BonusType, number>,
+    // "Modo Amplio": covering a tile also covers its 6 hex neighbors, so a
+    // mission clears much faster (a playtesting knob).
+    wideMode: false,
   },
   // Editable per-mission enemy composition (admin drag-to-add). Starts as the
   // base table; persisted so edits reach the game.
@@ -200,6 +203,7 @@ export function applyServerSettings(
         winPct?: unknown;
         heal?: unknown;
         respawn?: unknown;
+        wideMode?: unknown;
         missionEnemies?: unknown;
         missionBonuses?: unknown;
         sub?: unknown;
@@ -213,6 +217,7 @@ export function applyServerSettings(
   if (typeof s.winPct === 'number' && s.winPct > 0 && s.winPct <= 1) config.rules.winPct = s.winPct;
   if (typeof s.heal === 'number' && s.heal >= 0) config.rules.heal = s.heal;
   if (isValidRespawn(s.respawn)) config.rules.respawn = s.respawn;
+  if (typeof s.wideMode === 'boolean') config.rules.wideMode = s.wideMode;
   if (isValidMissionEnemies(s.missionEnemies)) config.missionEnemies = s.missionEnemies;
   if (isValidMissionBonuses(s.missionBonuses)) config.missionBonuses = s.missionBonuses;
   // Raw tuning knobs (admin-only, persisted server-side). Merged leaf-by-leaf
@@ -255,6 +260,7 @@ function saveSettingsToServer() {
     winPct: config.rules.winPct,
     heal: config.rules.heal,
     respawn: config.rules.respawn,
+    wideMode: config.rules.wideMode,
     missionEnemies: config.missionEnemies,
     missionBonuses: config.missionBonuses,
   });
@@ -269,6 +275,12 @@ export function saveConfig() {
     player: config.player,
     enemies: config.enemies,
   });
+}
+
+// Toggle "Modo Amplio" (covering a tile also covers its 6 neighbors) + persist.
+export function setWideMode(v: boolean) {
+  config.rules.wideMode = !!v;
+  saveSettingsToServer();
 }
 
 // Set the win-coverage rule from a PERCENTAGE (0-100), clamp, and persist it to
@@ -567,14 +579,8 @@ export function toggleSubmerged() {
   game.submerged = !game.submerged;
 }
 
-// Mark the tile currently under the sub as visited.
-export function markCurrentTile() {
-  const key = `${game.currentTileQ},${game.currentTileR}`;
-  if (!game.visited.has(key)) {
-    game.visited.add(key);
-    game.visitedCount++;
-  }
-}
+// (Tile covering lives in Scene.coverCurrentTile, which marks through the
+// boardKeys-guarded marker so an off-board edge tile can't inflate the count.)
 
 // --- Enemy context-menu actions ---
 export function selectEnemy(id: string) {
