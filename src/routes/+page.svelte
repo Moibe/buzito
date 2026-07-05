@@ -1531,6 +1531,12 @@
     font: 500 14px/1.4 system-ui, sans-serif;
   }
   .gameover-card p.gameover-lives {
+    /* Own full-width line (overrides .lives-hearts' inline-flex) so the button
+       below drops to the next line. */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
     margin: -10px 0 18px;
     color: rgba(255, 255, 255, 0.65);
     font: 600 12px/1.3 system-ui, sans-serif;
