@@ -86,6 +86,9 @@
   const missionPct = $derived(
     game.totalTiles > 0 ? Math.min(100, (game.visitedCount / game.totalTiles) * 100) : 0
   );
+  // Integer % shown in the HUD; the display re-mounts (via {#key}) whenever this
+  // changes, replaying the dramatic pop animation.
+  const missionPctInt = $derived(Math.round(missionPct));
 
   // The enemy whose context menu is open (null = no menu).
   const selectedEnemy = $derived(
@@ -267,8 +270,10 @@
 
 <div class="hud">
   <div class="progress">
-    {game.visitedCount} / {game.totalTiles}
-    <span class="progress-pct">{missionPct.toFixed(0)}%</span>
+    {#key missionPctInt}
+      <span class="progress-pct">{missionPctInt}%</span>
+    {/key}
+    <span class="progress-count">{game.visitedCount} / {game.totalTiles}</span>
   </div>
 </div>
 
@@ -491,7 +496,7 @@
   }
   .hud {
     position: fixed;
-    bottom: 20px;
+    top: 20px;
     right: 20px;
     z-index: 10;
     display: flex;
@@ -499,18 +504,53 @@
     gap: 14px;
   }
   .progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     color: #ffd700;
     font: 700 15px/1 system-ui, sans-serif;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     letter-spacing: 0.03em;
   }
+  /* Percentage first, slightly larger, and it pops each time it changes. */
   .progress-pct {
-    margin-left: 6px;
-    padding: 2px 8px;
+    display: inline-block;
+    padding: 4px 12px;
     border-radius: 999px;
     background: rgba(255, 215, 0, 0.16);
     border: 1px solid rgba(255, 215, 0, 0.5);
-    font-size: 13px;
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+    transform-origin: center;
+    animation: pctPop 0.5s cubic-bezier(0.2, 1.4, 0.3, 1);
+  }
+  .progress-count {
+    font-size: 14px;
+    opacity: 0.85;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Dramatic pop: overshoot scale + bright flash + glow burst, then settle. */
+  @keyframes pctPop {
+    0% {
+      transform: scale(1.9) rotate(-4deg);
+      color: #fff;
+      background: rgba(255, 235, 120, 0.55);
+      border-color: #fff;
+      box-shadow: 0 0 26px rgba(255, 215, 0, 0.95);
+    }
+    45% {
+      transform: scale(0.82) rotate(1.5deg);
+    }
+    70% {
+      transform: scale(1.12);
+    }
+    100% {
+      transform: scale(1) rotate(0deg);
+      color: #ffd700;
+      background: rgba(255, 215, 0, 0.16);
+      border-color: rgba(255, 215, 0, 0.5);
+      box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+    }
   }
 
   /* Level picker screen. */
