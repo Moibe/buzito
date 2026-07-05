@@ -266,10 +266,6 @@
 </div>
 
 <div class="hud">
-  <div class="hint">
-    ← → girar · ↑ ↓ avanzar / reversa · Espacio: sumergir · clic en un enemigo: menú
-    (seleccionado + clic en el mar: mover)
-  </div>
   <div class="progress">
     {game.visitedCount} / {game.totalTiles}
     <span class="progress-pct">{missionPct.toFixed(0)}%</span>
@@ -501,11 +497,6 @@
     display: flex;
     align-items: center;
     gap: 14px;
-  }
-  .hint {
-    color: rgba(255, 255, 255, 0.78);
-    font: 500 13px/1.4 system-ui, sans-serif;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   }
   .progress {
     color: #ffd700;
