@@ -320,16 +320,16 @@
   </div>
 </div>
 
-<!-- Help: re-open the submarine how-to-play walkthrough at any time. -->
-<button class="help-btn" onclick={openSubIntro} title="¿Cómo jugar?" aria-label="Cómo jugar">?</button>
+<!-- Top-left toolbar (outside the stats card): back-to-missions + how-to-play. -->
+<div class="hud-tools">
+  <button class="tool-btn" onclick={goToLevelSelect} title="Volver a Misiones" aria-label="Volver a Misiones">🏠</button>
+  <button class="tool-btn info" onclick={openSubIntro} title="¿Cómo jugar?" aria-label="Cómo jugar">i</button>
+</div>
 
 <!-- Stats side panel — docked in the empty strip to the LEFT of the board,
-     vertically centered, its width adapting to that strip (game.boardLeftPx). -->
+     its width adapting to that strip (game.boardLeftPx). -->
 <div class="stats" style="width: {statsWidth}px">
   <div class="stats-title">
-    <button class="home-btn" onclick={goToLevelSelect} title="Volver a Misiones" aria-label="Volver a Misiones">
-      🏠
-    </button>
     <span class="lvl-badge">Nivel {game.level}</span>
     <span class="lvl-diff">{mission.label}</span>
   </div>
@@ -1116,37 +1116,19 @@
     color: #fff;
   }
 
-  /* "Back to Misiones" icon button — top-left corner, inside the stats panel. */
-  .home-btn {
-    flex-shrink: 0;
-    width: 26px;
-    height: 26px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 215, 0, 0.12);
-    color: #ffd700;
-    border: 1px solid rgba(255, 215, 0, 0.55);
-    border-radius: 6px;
-    padding: 0;
-    font-size: 13px;
-    line-height: 1;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .home-btn:hover {
-    background: rgba(255, 215, 0, 0.26);
-    border-color: rgba(255, 215, 0, 0.9);
-  }
-
-  /* Help button — reopens the submarine how-to-play at any time (bottom-left). */
-  .help-btn {
+  /* Top-left toolbar (outside the stats card): round icon buttons — back to
+     Misiones (🏠) + how-to-play (i). */
+  .hud-tools {
     position: fixed;
-    bottom: 20px;
-    left: 20px;
-    z-index: 12;
-    width: 40px;
-    height: 40px;
+    top: 16px;
+    left: 12px;
+    z-index: 16;
+    display: flex;
+    gap: 8px;
+  }
+  .tool-btn {
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1154,14 +1136,17 @@
     color: #ffd700;
     border: 1px solid rgba(255, 215, 0, 0.55);
     border-radius: 50%;
-    font: 800 20px/1 system-ui, sans-serif;
+    font: 700 18px/1 system-ui, sans-serif;
     cursor: pointer;
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
     transition: background 0.15s, border-color 0.15s, transform 0.1s;
   }
-  .help-btn:hover {
+  .tool-btn.info {
+    font: italic 800 20px/1 Georgia, 'Times New Roman', serif;
+  }
+  .tool-btn:hover {
     background: rgba(20, 45, 68, 0.9);
     border-color: rgba(255, 215, 0, 0.95);
     transform: translateY(-1px);
@@ -1248,7 +1233,7 @@
   .stats {
     position: fixed;
     left: 8px;
-    top: 20px;
+    top: 64px;
     z-index: 15;
     box-sizing: border-box;
     background: rgba(10, 20, 30, 0.55);
