@@ -103,6 +103,7 @@
   let arenaTex = $state.raw<ThreeTexture | undefined>(undefined);
   $effect(() => {
     const n = game.missionCityN;
+    const a = game.arena; // this arena's image = slot #a
     arenaTex = undefined;
     if (!n) return;
     let cancelled = false;
@@ -110,7 +111,7 @@
     fetch(`/api/cities/${n}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        const f = d?.slots?.[0];
+        const f = d?.slots?.[a - 1];
         if (cancelled || !f) return;
         new TextureLoader().load(`/api/cities/${n}/${f}`, (tex) => {
           if (cancelled) {

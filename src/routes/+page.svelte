@@ -10,8 +10,10 @@
     respawnEnemies,
     resetGame,
     startMission,
+    advanceArena,
     goToLevelSelect,
     reshuffleMissions,
+    ARENAS_PER_CITY,
   } from '$lib/game.svelte';
   import { MISSIONS } from '$lib/missions';
 
@@ -110,7 +112,11 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="scene" oncontextmenu={onSceneContextMenu}>
   <Canvas>
-    <Scene />
+    <!-- Remount the scene per arena so all transient state resets cleanly when
+         flying to the next arena (new image, fresh sub/enemies/pickups). -->
+    {#key game.arena}
+      <Scene />
+    {/key}
   </Canvas>
 </div>
 
@@ -140,7 +146,7 @@
     <span class="lvl-badge">Nivel {game.level}</span>
     <span class="lvl-diff">{mission.label}</span>
   </div>
-  <div class="stat-sub">🎯 {game.missionCity}</div>
+  <div class="stat-sub">🎯 {game.missionCity} · Arena {game.arena}/{ARENAS_PER_CITY}</div>
   <div class="stat-row" style="margin-top: 10px;">
     <span class="stat-label">Casco</span>
     <span class="stat-value">{game.hp}/{config.sub.hp}</span>
@@ -165,13 +171,23 @@
 {#if game.won}
   <div class="win-banner">
     <span class="win-title">🎉 ¡Felicitaciones!</span>
-    <span class="win-sub">Misión {game.missionCity} completada</span>
+    <span class="win-sub">
+      {#if game.arena < ARENAS_PER_CITY}
+        {game.missionCity} · Arena {game.arena}/{ARENAS_PER_CITY} descubierta
+      {:else}
+        ¡{game.missionCity} completada! ({ARENAS_PER_CITY}/{ARENAS_PER_CITY})
+      {/if}
+    </span>
   </div>
-  <!-- Continue button below the banner: back to the picker for the next city. -->
+  <!-- Continue: next arena of the same city, or (after arena 4) back to the picker. -->
   <div class="win-cta">
-    <button onclick={goToLevelSelect}>
-      {campaignDone ? '🏆 Campaña completada — Ver misiones' : '✈ Volar a la siguiente misión'}
-    </button>
+    {#if game.arena < ARENAS_PER_CITY}
+      <button onclick={advanceArena}>✈ Volar a la siguiente misión ({game.arena + 1}/{ARENAS_PER_CITY})</button>
+    {:else}
+      <button onclick={goToLevelSelect}>
+        {campaignDone ? '🏆 Campaña completada — Ver misiones' : '🏁 Ciudad completada — Volver a misiones'}
+      </button>
+    {/if}
   </div>
 {/if}
 

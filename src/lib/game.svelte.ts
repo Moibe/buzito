@@ -2,6 +2,9 @@ import { pickRandomCities, WORLD_CITIES } from './cities';
 import { MISSIONS, ENEMY_INFO, BONUS_INFO } from './missions';
 import type { Bonuses, BonusType } from './missions';
 
+// Each city is played across this many arenas (one per image slot).
+export const ARENAS_PER_CITY = 4;
+
 export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark' | 'minelayer';
 
 // A machine-gun tracer round (pooled; physics driven by Scene, drawn by
@@ -352,9 +355,11 @@ export const game = $state({
   campaignStarted: false,
   // The city of the mission currently being played (set by startMission).
   missionCity: '',
-  // Its 1-based index in WORLD_CITIES → the key for its stored images (the
-  // arena reveals this city's image #1 as tiles are covered). 0 = none.
+  // Its 1-based index in WORLD_CITIES → the key for its stored images. 0 = none.
   missionCityN: 0,
+  // Which of the city's 4 arenas is being played (1..4) — one per image slot.
+  // "Volar a la siguiente misión" advances this; the city is beaten after 4.
+  arena: 1,
   // Difficulty multiplier of the current mission (Scene scales enemy stats by
   // this; 1 = baseline). Set by startLevel from the missions table.
   missionPower: 1,
@@ -484,19 +489,29 @@ export function startMission(city: string) {
   game.campaignStarted = true;
   game.missionCity = city;
   game.missionCityN = WORLD_CITIES.indexOf(city) + 1; // 0 if not found
+  game.arena = 1;
   game.missionPower = MISSIONS[level - 1].power;
   resetGame();
   respawnEnemies();
   game.screen = 'play';
 }
 
-// Mark the current mission won and record its city as cleared (advances the
-// difficulty for the next pick). Idempotent.
+// Mark the current arena won. The CITY is only cleared once its LAST arena (4)
+// is beaten — that's what advances the campaign difficulty for the next pick.
 export function markMissionWon() {
   game.won = true;
-  if (game.missionCity && !game.completed.includes(game.missionCity)) {
+  if (game.arena >= ARENAS_PER_CITY && game.missionCity && !game.completed.includes(game.missionCity)) {
     game.completed.push(game.missionCity);
   }
+}
+
+// "Volar a la siguiente misión": reload the SAME city's next arena (next image),
+// fresh sub/enemies, staying in the arena. No-op past the last one.
+export function advanceArena() {
+  if (game.arena >= ARENAS_PER_CITY) return;
+  game.arena += 1;
+  resetGame(); // fresh sub, cleared coverage, won=false
+  respawnEnemies(); // same level's roster
 }
 
 // Draw a fresh random set of 8 cities and restart the campaign progress.
