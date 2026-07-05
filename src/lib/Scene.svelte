@@ -1672,6 +1672,9 @@
   moving={game.moving}
   submerged={game.submerged}
   scale={SUB_SCALE}
+  color={config.sub.color}
+  detailColor={config.sub.detailColor}
+  detail={config.sub.detail}
 />
 
 <!-- Enemy vessels — click one to open its context menu (activate/deactivate). -->

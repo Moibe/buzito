@@ -33,6 +33,11 @@
     periscopeUp = false,
     scale = 0.95,
     tileHeight = 0.4,
+    // Customization: primary hull color, secondary accent color, and which
+    // accent "detail" wears the secondary color.
+    color = '#2a2e30',
+    detailColor = '#ffcf33',
+    detail = 'stripes',
   }: {
     x?: number;
     z?: number;
@@ -42,7 +47,15 @@
     periscopeUp?: boolean;
     scale?: number;
     tileHeight?: number;
+    color?: string;
+    detailColor?: string;
+    detail?: string;
   } = $props();
+
+  // Tower/vela wear the secondary color only for the 'tower' detail; otherwise
+  // the dark default. Bow cap wears it only for 'nose'.
+  const towerColor = $derived(detail === 'tower' ? detailColor : '#1a1c1e');
+  const bowColor = $derived(detail === 'nose' ? detailColor : color);
 
   // Surfaced subs share the warship base Y so they sit at the same waterline.
   // Submerged drops the hull just a hair so wave peaks visibly slice across
@@ -227,26 +240,49 @@
       renderOrder={2}
     >
       <T.CylinderGeometry args={[0.18, 0.18, 1.5, 14]} />
-      <T.MeshStandardMaterial color="#2a2e30" flatShading />
+      <T.MeshStandardMaterial color={color} flatShading />
     </T.Mesh>
     <!-- Bow / stern rounded caps. -->
     <T.Mesh position={[0, 0, -0.75]} castShadow renderOrder={2}>
       <T.SphereGeometry args={[0.18, 12, 10]} />
-      <T.MeshStandardMaterial color="#2a2e30" flatShading />
+      <T.MeshStandardMaterial color={bowColor} flatShading />
     </T.Mesh>
     <T.Mesh position={[0, 0, 0.75]} castShadow renderOrder={2}>
       <T.SphereGeometry args={[0.18, 12, 10]} />
-      <T.MeshStandardMaterial color="#2a2e30" flatShading />
+      <T.MeshStandardMaterial color={color} flatShading />
     </T.Mesh>
+
+    <!-- Accent detail in the secondary color (only one shows at a time). -->
+    {#if detail === 'stripes'}
+      {#each [-0.32, 0.32] as sz}
+        <T.Mesh position={[0, 0, sz]} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+          <T.CylinderGeometry args={[0.193, 0.193, 0.06, 16]} />
+          <T.MeshStandardMaterial color={detailColor} flatShading />
+        </T.Mesh>
+      {/each}
+    {:else if detail === 'diagonals'}
+      {#each [-0.18, 0, 0.18] as sz}
+        <T.Mesh position={[0, 0.17, sz]} rotation={[0, 0.6, 0]} castShadow renderOrder={2}>
+          <T.BoxGeometry args={[0.3, 0.05, 0.06]} />
+          <T.MeshStandardMaterial color={detailColor} flatShading />
+        </T.Mesh>
+      {/each}
+    {:else if detail === 'dorsal'}
+      <T.Mesh position={[0, 0.18, 0.02]} castShadow renderOrder={2}>
+        <T.BoxGeometry args={[0.06, 0.04, 1.2]} />
+        <T.MeshStandardMaterial color={detailColor} flatShading />
+      </T.Mesh>
+    {/if}
+
     <!-- Conning tower. The iconic central block; slightly forward of mid -->
     <T.Mesh position={[0, 0.17, -0.05]} castShadow renderOrder={2}>
       <T.BoxGeometry args={[0.18, 0.16, 0.36]} />
-      <T.MeshStandardMaterial color="#1a1c1e" flatShading />
+      <T.MeshStandardMaterial color={towerColor} flatShading />
     </T.Mesh>
     <!-- Vela: the taller wedge at the front of the tower (the bridge). -->
     <T.Mesh position={[0, 0.28, -0.14]} castShadow renderOrder={2}>
       <T.BoxGeometry args={[0.13, 0.1, 0.14]} />
-      <T.MeshStandardMaterial color="#1a1c1e" flatShading />
+      <T.MeshStandardMaterial color={towerColor} flatShading />
     </T.Mesh>
     <!-- Tiny deck cleats fore and aft — silhouette detail. -->
     <T.Mesh position={[0, 0.20, 0.55]} castShadow renderOrder={2}>

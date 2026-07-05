@@ -5,6 +5,15 @@ import type { Bonuses, BonusType } from './missions';
 // Each city is played across this many arenas (one per image slot).
 export const ARENAS_PER_CITY = 4;
 
+// The 5 accent details the player can put in the sub's secondary color.
+export const SUB_DETAILS: { id: string; name: string }[] = [
+  { id: 'stripes', name: '2 bandas' },
+  { id: 'diagonals', name: '3 diagonales' },
+  { id: 'dorsal', name: 'Franja dorsal' },
+  { id: 'tower', name: 'Torreta' },
+  { id: 'nose', name: 'Proa' },
+];
+
 export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark' | 'minelayer';
 
 // A machine-gun tracer round (pooled; physics driven by Scene, drawn by
@@ -52,7 +61,16 @@ function baseMissionBonuses(): Bonuses[] {
 }
 
 export const config = $state({
-  sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
+  sub: {
+    hp: 50,
+    speed: 3.0,
+    turnRate: 1.8,
+    // Appearance (per-player; persisted in localStorage): primary hull color,
+    // secondary accent color, and which accent detail wears it.
+    color: '#2a2e30',
+    detailColor: '#ffcf33',
+    detail: 'stripes',
+  },
   // Game rules the admin edits in "Ajustes" (persisted server-side so the
   // change reaches every player). winPct = fraction of tiles to cover to win;
   // heal = health per orb; respawn = seconds until a new wave of each bonus
@@ -213,6 +231,46 @@ export function setWinPct(pct: number) {
   const v = Math.max(0.01, Math.min(1, (Number(pct) || 0) / 100));
   config.rules.winPct = v;
   saveSettingsToServer();
+}
+
+// --- Sub appearance (per-player preference, persisted in localStorage) ---
+if (typeof localStorage !== 'undefined') {
+  try {
+    const a = JSON.parse(localStorage.getItem('buzito.appearance') || 'null');
+    if (a && typeof a === 'object') {
+      if (typeof a.color === 'string') config.sub.color = a.color;
+      if (typeof a.detailColor === 'string') config.sub.detailColor = a.detailColor;
+      if (typeof a.detail === 'string' && SUB_DETAILS.some((d) => d.id === a.detail)) {
+        config.sub.detail = a.detail;
+      }
+    }
+  } catch {
+    /* ignore corrupt value */
+  }
+}
+function saveAppearance() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(
+      'buzito.appearance',
+      JSON.stringify({
+        color: config.sub.color,
+        detailColor: config.sub.detailColor,
+        detail: config.sub.detail,
+      })
+    );
+  }
+}
+export function setSubColor(v: string) {
+  config.sub.color = v;
+  saveAppearance();
+}
+export function setSubDetailColor(v: string) {
+  config.sub.detailColor = v;
+  saveAppearance();
+}
+export function setSubDetail(v: string) {
+  config.sub.detail = v;
+  saveAppearance();
 }
 
 // Health restored per orb.

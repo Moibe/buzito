@@ -14,6 +14,10 @@
     goToLevelSelect,
     reshuffleMissions,
     ARENAS_PER_CITY,
+    SUB_DETAILS,
+    setSubColor,
+    setSubDetailColor,
+    setSubDetail,
   } from '$lib/game.svelte';
   import { MISSIONS } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
@@ -230,6 +234,27 @@
         <input type="checkbox" bind:checked={config.player.speedBoost.enabled} />
       </label>
       <label class="knob"><span>Multiplicador</span><input type="number" step="0.1" min="1" bind:value={config.player.speedBoost.mult} /></label>
+
+      <div class="abil-sec">Apariencia</div>
+      <label class="knob">
+        <span>Color primario</span>
+        <input type="color" value={config.sub.color} oninput={(e) => setSubColor(e.currentTarget.value)} />
+      </label>
+      <label class="knob">
+        <span>Color secundario</span>
+        <input type="color" value={config.sub.detailColor} oninput={(e) => setSubDetailColor(e.currentTarget.value)} />
+      </label>
+      <div class="detail-grid">
+        {#each SUB_DETAILS as d}
+          <button
+            class="detail-opt"
+            class:sel={config.sub.detail === d.id}
+            onclick={() => setSubDetail(d.id)}
+          >
+            {d.name}
+          </button>
+        {/each}
+      </div>
     </div>
   </div>
 {/if}
@@ -754,6 +779,36 @@
   .abil-panel .knob input {
     border-color: rgba(90, 214, 200, 0.5);
     background: rgba(4, 16, 18, 0.7);
+  }
+  .abil-panel .knob input[type='color'] {
+    width: 40px;
+    height: 26px;
+    padding: 2px;
+    cursor: pointer;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .detail-opt {
+    background: rgba(4, 16, 18, 0.7);
+    border: 1px solid rgba(90, 214, 200, 0.4);
+    color: #a9ede4;
+    border-radius: 7px;
+    padding: 7px 6px;
+    font: 600 12px/1 system-ui, sans-serif;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .detail-opt:hover {
+    background: rgba(20, 82, 86, 0.7);
+  }
+  .detail-opt.sel {
+    background: rgba(55, 196, 180, 0.25);
+    border-color: #37c4b4;
+    color: #fff;
   }
   /* Teal variant of the HUD button that opens this panel. */
   .abil-btn {
