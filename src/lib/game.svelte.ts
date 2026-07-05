@@ -233,7 +233,7 @@ export function setWinPct(pct: number) {
   saveSettingsToServer();
 }
 
-// --- Sub appearance (per-player preference, persisted in localStorage) ---
+// --- Sub appearance + player name (per-player prefs, persisted in localStorage) ---
 if (typeof localStorage !== 'undefined') {
   try {
     const a = JSON.parse(localStorage.getItem('buzito.appearance') || 'null');
@@ -247,6 +247,12 @@ if (typeof localStorage !== 'undefined') {
   } catch {
     /* ignore corrupt value */
   }
+}
+
+// Set (and persist) the player's name.
+export function setPlayerName(name: string) {
+  game.playerName = name;
+  if (typeof localStorage !== 'undefined') localStorage.setItem('buzito.playerName', name);
 }
 function saveAppearance() {
   if (typeof localStorage !== 'undefined') {
@@ -400,6 +406,8 @@ function makeEnemiesForMission(n: number, power: number): Enemy[] {
 export const game = $state({
   // Which screen: intro → sub customization → mission picker → arena.
   screen: 'intro' as 'intro' | 'sub' | 'select' | 'play',
+  // Player name (entered on Start; persisted per-player in localStorage).
+  playerName: '',
   // Currently selected mission slot (1-8). Cosmetic for now — all lead to arena.
   level: 1,
   // The 8 campaign cities: random from the world's 100 largest. The player
@@ -466,6 +474,12 @@ export const game = $state({
   // menu out from under the cursor).
   menuHover: false,
 });
+
+// Restore the per-player name saved on a previous visit.
+if (typeof localStorage !== 'undefined') {
+  const savedName = localStorage.getItem('buzito.playerName');
+  if (savedName) game.playerName = savedName;
+}
 
 export function toggleSubmerged() {
   game.submerged = !game.submerged;

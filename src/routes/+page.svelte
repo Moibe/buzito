@@ -20,6 +20,7 @@
     setSubColor,
     setSubDetailColor,
     setSubDetail,
+    setPlayerName,
   } from '$lib/game.svelte';
   import SubPreview from '$lib/SubPreview.svelte';
   import IntroScene from '$lib/IntroScene.svelte';
@@ -34,6 +35,23 @@
   const campaignDone = $derived(game.completed.length >= MISSIONS.length);
   // Two-step confirm for the "Salir" (reset campaign) button.
   let confirmingExit = $state(false);
+
+  // "Iniciar Juego" → name modal, then the sub screen.
+  let showNameModal = $state(false);
+  let nameInput = $state('');
+  let nameField = $state.raw<HTMLInputElement | undefined>(undefined);
+  $effect(() => {
+    if (showNameModal) nameField?.focus();
+  });
+  function openNameModal() {
+    nameInput = game.playerName;
+    showNameModal = true;
+  }
+  function confirmName() {
+    setPlayerName(nameInput.trim());
+    showNameModal = false;
+    game.screen = 'sub';
+  }
 
   const hpPct = $derived(
     config.sub.hp > 0 ? Math.min(100, (game.hp / config.sub.hp) * 100) : 0
@@ -74,8 +92,29 @@
         <h1 class="intro-title">buzito</h1>
         <p class="intro-tag">Sumérgete · Descubre · Conquista</p>
       </div>
-      <button class="intro-start" onclick={() => (game.screen = 'sub')}>Iniciar Juego</button>
+      <button class="intro-start" onclick={openNameModal}>Iniciar Juego</button>
     </div>
+
+    {#if showNameModal}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="name-backdrop" onclick={() => (showNameModal = false)}>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="name-modal" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+          <h2>Nombre del Jugador</h2>
+          <input
+            bind:this={nameField}
+            bind:value={nameInput}
+            type="text"
+            placeholder="Tu nombre"
+            maxlength="24"
+            onkeydown={(e) => e.key === 'Enter' && confirmName()}
+          />
+          <button class="name-go" onclick={confirmName}>Zarpar ⚓</button>
+        </div>
+      </div>
+    {/if}
   </div>
 {:else if game.screen === 'sub'}
   <!-- Submarine choice & customization, shown before the city picker. -->
@@ -568,6 +607,68 @@
   @keyframes introbtn {
     0%, 100% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 26px rgba(255, 215, 0, 0.4); }
     50% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 46px rgba(255, 215, 0, 0.75); }
+  }
+
+  /* --- Player-name modal (on the intro) --- */
+  .name-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(4, 12, 22, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .name-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 320px;
+    max-width: 88vw;
+    padding: 24px;
+    background: rgba(12, 26, 42, 0.96);
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 30px rgba(255, 215, 0, 0.2);
+    animation: winpop 0.35s ease-out;
+    text-align: center;
+  }
+  .name-modal h2 {
+    margin: 0;
+    color: #ffd700;
+    font: 800 20px/1 system-ui, sans-serif;
+    letter-spacing: 0.02em;
+  }
+  .name-modal input {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 9px;
+    padding: 12px 14px;
+    color: #fff;
+    font: 600 16px/1 system-ui, sans-serif;
+    text-align: center;
+  }
+  .name-modal input::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+  }
+  .name-modal input:focus {
+    outline: none;
+    border-color: #ffd700;
+  }
+  .name-go {
+    background: linear-gradient(135deg, #ffd700, #ffb300);
+    color: #10233f;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font: 800 16px/1 system-ui, sans-serif;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .name-go:hover {
+    transform: translateY(-1px);
   }
 
   /* --- Submarine customization screen --- */
