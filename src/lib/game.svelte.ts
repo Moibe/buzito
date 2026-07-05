@@ -732,6 +732,9 @@ export function startMission(city: string) {
 // is beaten — that's what advances the campaign difficulty for the next pick.
 export function markMissionWon() {
   game.won = true;
+  // Every arena cleared earns an extra life — no cap, so a long run can climb
+  // well past STARTING_LIVES.
+  game.lives++;
   if (game.arena >= ARENAS_PER_CITY && game.missionCity && !game.completed.includes(game.missionCity)) {
     game.completed.push(game.missionCity);
     // Also add to the permanent trophy case shown on the profile.

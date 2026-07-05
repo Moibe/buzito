@@ -16,7 +16,6 @@
     reshuffleMissions,
     startNewCampaign,
     ARENAS_PER_CITY,
-    STARTING_LIVES,
     SUB_DETAILS,
     setSubColor,
     setSubDetailColor,
@@ -38,8 +37,9 @@
   const nextLevel = $derived(Math.min(MISSIONS.length, game.completed.length + 1));
   const nextMission = $derived(MISSIONS[nextLevel - 1]);
   const campaignDone = $derived(game.completed.length >= MISSIONS.length);
-  // Fixed-length slots for the lives display (pink hearts, filled/empty).
-  const lifeSlots = Array.from({ length: STARTING_LIVES });
+  // One heart per current life — an arena win grants an extra life (uncapped,
+  // can climb well past the starting count) and a death removes one.
+  const lifeSlots = $derived(Array.from({ length: Math.max(0, game.lives) }));
   // Two-step confirm for the "Salir" (reset campaign) button.
   let confirmingExit = $state(false);
 
@@ -197,8 +197,8 @@
         <span class="ls-progress">({game.completed.length}/{MISSIONS.length} liberadas)</span>
         <span class="ls-progress lives-hearts">
           ·
-          {#each lifeSlots as _, i}
-            <span class="life-heart" class:lost={i >= game.lives}>♥</span>
+          {#each lifeSlots as _}
+            <span class="life-heart">♥</span>
           {/each}
         </span>
       </p>
@@ -282,8 +282,8 @@
   <div class="stat-row" style="margin-top: 10px;">
     <span class="stat-label">Vidas</span>
     <span class="stat-value lives-hearts">
-      {#each lifeSlots as _, i}
-        <span class="life-heart" class:lost={i >= game.lives}>♥</span>
+      {#each lifeSlots as _}
+        <span class="life-heart">♥</span>
       {/each}
     </span>
   </div>
@@ -358,8 +358,8 @@
         <p>{game.deathCause || 'Tu energía se agotó.'}</p>
         <p class="gameover-lives lives-hearts">
           Vidas restantes:
-          {#each lifeSlots as _, i}
-            <span class="life-heart" class:lost={i >= game.lives}>♥</span>
+          {#each lifeSlots as _}
+            <span class="life-heart">♥</span>
           {/each}
         </p>
         <button onclick={resetGame}>Reintentar</button>
@@ -1142,9 +1142,11 @@
   .stat-value {
     font-variant-numeric: tabular-nums;
   }
-  /* Lives display: pink hearts (filled = remaining, dim outline = lost). */
+  /* Lives display: one pink heart per current life (uncapped — an arena win
+     grants an extra one, so this can wrap onto more than one row). */
   .lives-hearts {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 3px;
   }
@@ -1153,11 +1155,6 @@
     font-size: 15px;
     line-height: 1;
     text-shadow: 0 0 6px rgba(255, 92, 158, 0.6);
-  }
-  .life-heart.lost {
-    color: transparent;
-    -webkit-text-stroke: 1px rgba(255, 92, 158, 0.4);
-    text-shadow: none;
   }
   .stat-bar {
     height: 6px;
