@@ -6,7 +6,6 @@
     config,
     closeEnemyMenu,
     toggleEnemyActive,
-    toggleAllEnemies,
     resetGame,
     startMission,
     advanceArena,
@@ -82,8 +81,6 @@
   const missionPct = $derived(
     game.totalTiles > 0 ? Math.min(100, (game.visitedCount / game.totalTiles) * 100) : 0
   );
-  // TEMP (debug): whether any enemy is currently active.
-  const enemiesActive = $derived(game.enemies.some((e) => e.active));
 
   // The enemy whose context menu is open (null = no menu).
   const selectedEnemy = $derived(
@@ -263,10 +260,6 @@
     <span class="progress-pct">{missionPct.toFixed(0)}%</span>
   </div>
   <button class="level-btn" onclick={goToLevelSelect}>◄ {game.missionCity || 'Misiones'}</button>
-  <!-- TEMP (debug): freeze / reactivate all enemies at once. -->
-  <button class="debug-btn" onclick={toggleAllEnemies}>
-    {enemiesActive ? '⏸ Detener enemigos' : '▶ Reactivar enemigos'}
-  </button>
 </div>
 
 <!-- Submarine stats panel (top-left) — hull bar, hexa-turnos ShipStats style. -->
@@ -1000,28 +993,6 @@
     height: 100%;
     border-radius: 2px;
     transition: width 0.15s linear;
-  }
-
-  /* TEMP (debug) button — distinct violet chrome so it reads as a scaffold
-     control, not part of the real HUD. */
-  .debug-btn {
-    background: rgba(60, 20, 70, 0.72);
-    color: #e9b8ff;
-    border: 1px dashed rgba(200, 130, 240, 0.7);
-    border-radius: 8px;
-    padding: 9px 14px;
-    font: 600 13px/1 system-ui, sans-serif;
-    cursor: pointer;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .debug-btn:hover {
-    background: rgba(80, 28, 92, 0.9);
-    border-color: rgba(220, 160, 255, 1);
-  }
-  .debug-btn:active {
-    transform: translateY(1px);
   }
 
   /* Enemy context menu (main card + submenu) — gold theme, same chrome as
