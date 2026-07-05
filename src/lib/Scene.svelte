@@ -118,6 +118,17 @@
             return;
           }
           tex.colorSpace = SRGBColorSpace;
+          // "cover" fit: preserve the image's aspect ratio, fill the (square)
+          // arena and crop the overflow — no stretching, whatever size uploaded.
+          const img = tex.image as { width: number; height: number };
+          const imgAspect = img.width / img.height;
+          const planeAspect = FRAME_U / FRAME_V; // ~1 (arena is square in u/v)
+          tex.center.set(0.5, 0.5);
+          if (imgAspect > planeAspect) {
+            tex.repeat.set(planeAspect / imgAspect, 1); // wide image → crop sides
+          } else {
+            tex.repeat.set(1, imgAspect / planeAspect); // tall image → crop top/bottom
+          }
           loaded = tex;
           arenaTex = tex;
         });
