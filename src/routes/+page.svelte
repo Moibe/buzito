@@ -159,6 +159,7 @@
   <div class="subscreen">
     <button type="button" class="ls-title" title="Volver al inicio" onclick={goToIntro}>buzito</button>
     <p class="ls-sub">Personaliza tu submarino</p>
+    <button class="sub-back" onclick={goToProfile}>◄ Perfil</button>
     <div class="sub-preview">
       <Canvas>
         <SubPreview color={config.sub.color} detailColor={config.sub.detailColor} detail={config.sub.detail} />
