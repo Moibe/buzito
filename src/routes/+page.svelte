@@ -44,9 +44,10 @@
   // can climb well past the starting count) and a death removes one.
   const lifeSlots = $derived(Array.from({ length: Math.max(0, game.lives) }));
   // Width of the left side panel (stats): fills the empty strip beside the
-  // board, clamped so it stays readable on narrow screens (where it may spill a
-  // little over the board edge).
-  const statsWidth = $derived(Math.round(Math.max(148, Math.min(230, game.boardLeftPx - 10))));
+  // board, leaving an 8px left inset + ~10px gap before the board (so it doesn't
+  // touch the arena). Clamped so it stays readable on narrow screens (where it
+  // may spill a little over the board edge).
+  const statsWidth = $derived(Math.round(Math.max(126, Math.min(230, game.boardLeftPx - 18))));
   // Two-step confirm for the "Salir" (reset campaign) button.
   let confirmingExit = $state(false);
 
@@ -1247,8 +1248,7 @@
   .stats {
     position: fixed;
     left: 8px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 20px;
     z-index: 15;
     box-sizing: border-box;
     background: rgba(10, 20, 30, 0.55);
