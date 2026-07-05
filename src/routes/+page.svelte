@@ -16,6 +16,7 @@
     ARENAS_PER_CITY,
   } from '$lib/game.svelte';
   import { MISSIONS } from '$lib/missions';
+  import { cityFlagCode, cityCountry } from '$lib/cityFlags';
 
   // The current mission's difficulty definition (for the level indicator).
   const mission = $derived(MISSIONS[game.level - 1] ?? MISSIONS[0]);
@@ -82,7 +83,9 @@
             <span class="ls-tile-check">✓</span>
           {/if}
           <span class="ls-tile-city">{city}</span>
-          <span class="ls-tile-diff">{done ? 'Liberada' : 'Disponible'}</span>
+          {#if cityFlagCode(city)}
+            <span class="ls-tile-flag fi fi-{cityFlagCode(city)}" title={cityCountry(city)} aria-hidden="true"></span>
+          {/if}
         </button>
       {/each}
     </div>
@@ -461,9 +464,10 @@
     word-break: break-word;
     letter-spacing: 0.01em;
   }
-  .ls-tile-diff {
-    font: 600 11px/1 system-ui, sans-serif;
-    color: rgba(255, 255, 255, 0.6);
+  .ls-tile-flag {
+    font-size: 26px;
+    border-radius: 3px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
   }
   .ls-tile:hover:not(:disabled) {
     background: rgba(20, 45, 68, 0.92);
