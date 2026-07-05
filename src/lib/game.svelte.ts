@@ -5,6 +5,11 @@ import type { Bonuses, BonusType } from './missions';
 // Each city is played across this many arenas (one per image slot).
 export const ARENAS_PER_CITY = 4;
 
+// Retries for the WHOLE 8-mission campaign (shared across every city/arena).
+// A death consumes one; at 0 the run is over — only a fresh campaign
+// (reshuffle) restores it.
+export const STARTING_LIVES = 3;
+
 // The 5 accent details the player can put in the sub's secondary color.
 export const SUB_DETAILS: { id: string; name: string }[] = [
   { id: 'stripes', name: '2 bandas' },
@@ -483,6 +488,10 @@ export const game = $state({
   // True once the player has entered any mission — locks the city reshuffle so
   // an in-progress campaign can't be reset out from under itself.
   campaignStarted: false,
+  // Retries left for this campaign run (across all 8 missions). A death
+  // consumes one; at 0 the run ends for good. In-memory only, like `completed`
+  // — reset by reshuffleMissions (a fresh campaign).
+  lives: STARTING_LIVES,
   // The city of the mission currently being played (set by startMission).
   missionCity: '',
   // Its 1-based index in WORLD_CITIES → the key for its stored images. 0 = none.
@@ -498,7 +507,9 @@ export const game = $state({
   heading: 0,
   moving: false,
   submerged: false,
-  // Hull points. Machine-gun tracers chip away at this while surfaced.
+  // Hull points — shown to the player as "Energía" (kept distinct from the
+  // 💙 health-orb BONUS, which is called "Vida"). Machine-gun tracers chip
+  // away at this while surfaced.
   hp: config.sub.hp,
   gameOver: false,
   // What sank the sub — shown on the game-over card.
@@ -667,16 +678,19 @@ export function toggleEnemyActive(id: string) {
   if (e) e.active = !e.active;
 }
 
-// Apply damage to the submarine's hull (hexa-turnos hp model). Clamps at 0
-// and flips game over; further damage is ignored once sunk. `cause` is the
-// message shown on the game-over card if this hit is the killing blow.
-export function damageSub(amount: number, cause = 'Tu casco no aguantó.') {
+// Apply damage to the submarine's hull (hexa-turnos hp model, shown to the
+// player as "Energía"). Clamps at 0 and flips game over; further damage is
+// ignored once sunk. `cause` is the message shown on the game-over card if
+// this hit is the killing blow. A death consumes one of the campaign's
+// STARTING_LIVES retries — see game.lives.
+export function damageSub(amount: number, cause = 'Tu energía se agotó.') {
   if (game.gameOver || game.won) return; // won → mission complete, invincible
   game.hp = Math.max(0, game.hp - amount);
   game.hitFlash = 1;
   if (game.hp <= 0) {
     game.gameOver = true;
     game.deathCause = cause;
+    game.lives = Math.max(0, game.lives - 1);
   }
 }
 
@@ -736,11 +750,20 @@ export function advanceArena() {
   respawnEnemies(); // same roster, sharper stats for this arena
 }
 
-// Draw a fresh random set of 8 cities and restart the campaign progress.
+// Draw a fresh random set of 8 cities and restart the campaign progress
+// (including retries — a new run always starts with STARTING_LIVES).
 export function reshuffleMissions() {
   game.missions = pickRandomCities(8);
   game.completed = [];
   game.campaignStarted = false;
+  game.lives = STARTING_LIVES;
+}
+
+// Start a brand-new campaign after a run ends (STARTING_LIVES exhausted): a
+// fresh set of cities/lives, back at the city picker.
+export function startNewCampaign() {
+  reshuffleMissions();
+  goToLevelSelect();
 }
 
 // Back out of the arena to the level picker.

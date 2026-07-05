@@ -41,7 +41,7 @@ export const BONUS_INFO: Record<BonusType, { name: string; emoji: string; desc: 
   health: {
     name: 'Vida',
     emoji: '💙',
-    desc: 'Orbe de vida: repara tu casco al tocarlo. Los que están sumergidos se recogen buceando a su profundidad.',
+    desc: 'Orbe de vida: repara tu energía al tocarlo. Los que están sumergidos se recogen buceando a su profundidad.',
   },
   line: {
     name: 'Línea',

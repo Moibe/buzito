@@ -14,7 +14,9 @@
     goToIntro,
     goToProfile,
     reshuffleMissions,
+    startNewCampaign,
     ARENAS_PER_CITY,
+    STARTING_LIVES,
     SUB_DETAILS,
     setSubColor,
     setSubDetailColor,
@@ -191,6 +193,7 @@
         Elige tu ciudad — será tu
         <b>Nivel {nextLevel}</b> · {nextMission.label}
         <span class="ls-progress">({game.completed.length}/{MISSIONS.length} liberadas)</span>
+        <span class="ls-progress">· 🔄 {game.lives}/{STARTING_LIVES} vidas</span>
       </p>
     {/if}
     <button class="sub-back" onclick={goToSubScreen}>◄ Submarino</button>
@@ -270,7 +273,11 @@
   </div>
   <div class="stat-sub">🎯 {game.missionCity} · Arena {game.arena}/{ARENAS_PER_CITY}</div>
   <div class="stat-row" style="margin-top: 10px;">
-    <span class="stat-label">Casco</span>
+    <span class="stat-label">Vidas</span>
+    <span class="stat-value">{game.lives}/{STARTING_LIVES}</span>
+  </div>
+  <div class="stat-row" style="margin-top: 6px;">
+    <span class="stat-label">Energía</span>
     <span class="stat-value">{Math.max(0, Math.round(game.hp))}/{Math.round(config.sub.hp)}</span>
   </div>
   <div class="stat-bar">
@@ -330,13 +337,24 @@
   </div>
 {/if}
 
-<!-- Game over overlay. -->
+<!-- Game over overlay. Two variants: a retry while lives remain, or the final
+     "run over" card once the campaign's STARTING_LIVES are exhausted. -->
 {#if game.gameOver}
   <div class="gameover">
     <div class="gameover-card">
-      <h1>¡Hundido!</h1>
-      <p>{game.deathCause || 'Tu casco no aguantó.'}</p>
-      <button onclick={resetGame}>Reintentar</button>
+      {#if game.lives > 0}
+        <h1>¡Hundido!</h1>
+        <p>{game.deathCause || 'Tu energía se agotó.'}</p>
+        <p class="gameover-lives">Vidas restantes: {game.lives}/{STARTING_LIVES}</p>
+        <button onclick={resetGame}>Reintentar</button>
+      {:else}
+        <h1>☠ Fin de la partida</h1>
+        <p>{game.deathCause || 'Tu energía se agotó.'} Sin vidas restantes.</p>
+        <p class="gameover-lives">
+          Conquistaste {game.completed.length}/{MISSIONS.length} ciudades en esta campaña.
+        </p>
+        <button onclick={startNewCampaign}>Nueva campaña</button>
+      {/if}
     </div>
   </div>
 {/if}
@@ -1310,6 +1328,11 @@
     margin: 0 0 18px;
     color: rgba(255, 215, 0, 0.8);
     font: 500 14px/1.4 system-ui, sans-serif;
+  }
+  .gameover-card p.gameover-lives {
+    margin: -10px 0 18px;
+    color: rgba(255, 255, 255, 0.65);
+    font: 600 12px/1.3 system-ui, sans-serif;
   }
   .gameover-card button {
     background: rgba(255, 215, 0, 0.15);

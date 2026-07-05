@@ -130,7 +130,7 @@
           <div class="setting">
             <div class="setting-label">
               <strong>💙 Curación por orbe</strong>
-              <span>Puntos de casco que restaura cada orbe de vida.</span>
+              <span>Puntos de energía que restaura cada orbe de vida.</span>
             </div>
             <div class="setting-input">
               <input
@@ -367,7 +367,7 @@
         <div class="cfg-groups" onchange={saveConfig}>
           <section class="cfg-card">
             <h3>🔱 Submarino (jugador)</h3>
-            {@render num(config.sub, 'hp', 'Casco', 5, 1)}
+            {@render num(config.sub, 'hp', 'Energía', 5, 1)}
             {@render num(config.sub, 'speed', 'Velocidad', 0.1, 0)}
             {@render num(config.sub, 'turnRate', 'Giro', 0.1, 0)}
           </section>

@@ -1531,7 +1531,7 @@
         const ddz = t.z - game.z;
         if (ddx * ddx + ddz * ddz < TRACER_HIT_R2) {
           t.active = false;
-          damageSub(ep.warship.tracerDamage, 'Las metralletas del destructor acabaron con tu casco.');
+          damageSub(ep.warship.tracerDamage, 'Las metralletas del destructor agotaron tu energía.');
           continue;
         }
       }
