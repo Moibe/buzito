@@ -12,6 +12,7 @@
     startMission,
     advanceArena,
     goToLevelSelect,
+    goToSubScreen,
     reshuffleMissions,
     ARENAS_PER_CITY,
     SUB_DETAILS,
@@ -19,6 +20,7 @@
     setSubDetailColor,
     setSubDetail,
   } from '$lib/game.svelte';
+  import SubPreview from '$lib/SubPreview.svelte';
   import { MISSIONS } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
 
@@ -57,7 +59,36 @@
   }
 </script>
 
-{#if game.screen === 'select'}
+{#if game.screen === 'sub'}
+  <!-- Submarine choice & customization, shown before the city picker. -->
+  <div class="subscreen">
+    <h1 class="ls-title">buzito</h1>
+    <p class="ls-sub">Personaliza tu submarino</p>
+    <div class="sub-preview">
+      <Canvas>
+        <SubPreview color={config.sub.color} detailColor={config.sub.detailColor} detail={config.sub.detail} />
+      </Canvas>
+    </div>
+    <div class="sub-colors">
+      <label>
+        <span>Color primario</span>
+        <input type="color" value={config.sub.color} oninput={(e) => setSubColor(e.currentTarget.value)} />
+      </label>
+      <label>
+        <span>Color secundario</span>
+        <input type="color" value={config.sub.detailColor} oninput={(e) => setSubDetailColor(e.currentTarget.value)} />
+      </label>
+    </div>
+    <div class="sub-details">
+      {#each SUB_DETAILS as d}
+        <button class="sub-detail-opt" class:sel={config.sub.detail === d.id} onclick={() => setSubDetail(d.id)}>
+          {d.name}
+        </button>
+      {/each}
+    </div>
+    <button class="ls-reroll continue" onclick={goToLevelSelect}>Continuar →</button>
+  </div>
+{:else if game.screen === 'select'}
   <!-- City picker. Pick any city in any order — the Nth you beat is played at
        difficulty N. Beaten cities are marked and locked. -->
   <div class="levelselect">
@@ -71,6 +102,7 @@
         <span class="ls-progress">({game.completed.length}/{MISSIONS.length} liberadas)</span>
       </p>
     {/if}
+    <button class="sub-back" onclick={goToSubScreen}>◄ Submarino</button>
     <div class="ls-grid">
       {#each game.missions as city}
         {@const done = game.completed.includes(city)}
@@ -441,6 +473,92 @@
     justify-content: center;
     gap: 4px;
     text-align: center;
+  }
+
+  /* --- Submarine customization screen --- */
+  .subscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+  .sub-preview {
+    width: min(420px, 80vw);
+    height: 240px;
+    border-radius: 14px;
+    background: rgba(10, 25, 40, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+  }
+  .sub-colors {
+    display: flex;
+    gap: 22px;
+  }
+  .sub-colors label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255, 255, 255, 0.85);
+    font: 600 13px/1 system-ui, sans-serif;
+  }
+  .sub-colors input[type='color'] {
+    width: 52px;
+    height: 32px;
+    padding: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(10, 20, 30, 0.6);
+    cursor: pointer;
+  }
+  .sub-details {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    max-width: 460px;
+  }
+  .sub-detail-opt {
+    background: rgba(10, 25, 40, 0.72);
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font: 600 13px/1 system-ui, sans-serif;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .sub-detail-opt:hover {
+    background: rgba(20, 45, 68, 0.9);
+  }
+  .sub-detail-opt.sel {
+    background: rgba(255, 215, 0, 0.18);
+    border-color: #ffd700;
+    color: #fff;
+  }
+  .continue {
+    margin-top: 6px;
+  }
+  .sub-back {
+    background: rgba(10, 20, 30, 0.55);
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font: 600 13px/1 system-ui, sans-serif;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .sub-back:hover {
+    background: rgba(20, 45, 68, 0.85);
+    color: #fff;
   }
   .ls-title {
     margin: 0;

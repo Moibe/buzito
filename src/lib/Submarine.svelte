@@ -261,9 +261,11 @@
         </T.Mesh>
       {/each}
     {:else if detail === 'diagonals'}
-      {#each [-0.18, 0, 0.18] as sz}
-        <T.Mesh position={[0, 0.17, sz]} rotation={[0, 0.6, 0]} castShadow renderOrder={2}>
-          <T.BoxGeometry args={[0.3, 0.05, 0.06]} />
+      <!-- Small diagonal deck decals on the aft deck, clear of the tower and
+           sized to the narrow hull top so they don't float/overhang. -->
+      {#each [0.22, 0.36, 0.5] as sz}
+        <T.Mesh position={[0, 0.15, sz]} rotation={[0, 0.6, 0]} castShadow renderOrder={2}>
+          <T.BoxGeometry args={[0.14, 0.05, 0.06]} />
           <T.MeshStandardMaterial color={detailColor} flatShading />
         </T.Mesh>
       {/each}

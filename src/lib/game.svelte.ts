@@ -398,8 +398,8 @@ function makeEnemiesForMission(n: number, power: number): Enemy[] {
 }
 
 export const game = $state({
-  // Which screen is showing: the mission picker or the arena.
-  screen: 'select' as 'select' | 'play',
+  // Which screen is showing: sub customization → mission picker → arena.
+  screen: 'sub' as 'sub' | 'select' | 'play',
   // Currently selected mission slot (1-8). Cosmetic for now — all lead to arena.
   level: 1,
   // The 8 campaign cities: random from the world's 100 largest. The player
@@ -585,6 +585,11 @@ export function reshuffleMissions() {
 export function goToLevelSelect() {
   closeEnemyMenu();
   game.screen = 'select';
+}
+
+// Show the submarine customization screen (start of the flow / from the picker).
+export function goToSubScreen() {
+  game.screen = 'sub';
 }
 
 // Restart after sinking: fresh hull, back to the arena center, progress
