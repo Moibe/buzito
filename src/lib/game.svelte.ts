@@ -450,8 +450,9 @@ function makeEnemiesForMission(n: number, power: number): Enemy[] {
 }
 
 export const game = $state({
-  // Which screen: intro → sub customization → mission picker → arena.
-  screen: 'intro' as 'intro' | 'sub' | 'select' | 'play',
+  // Which screen: intro → (profile for returning players) → sub customization →
+  // mission picker → arena.
+  screen: 'intro' as 'intro' | 'profile' | 'sub' | 'select' | 'play',
   // Player name (entered on Start; persisted per-player in localStorage).
   playerName: '',
   // Currently selected mission slot (1-8). Cosmetic for now — all lead to arena.
@@ -459,9 +460,14 @@ export const game = $state({
   // The 8 campaign cities: random from the world's 100 largest. The player
   // picks them in ANY order — the Nth city they beat is played at difficulty N.
   missions: pickRandomCities(8),
-  // Cities already beaten (by name). length = how many levels are cleared, so
-  // the NEXT pick is played at level (completed.length + 1).
+  // Cities already beaten (by name) IN THE CURRENT CAMPAIGN. length = how many
+  // levels are cleared, so the NEXT pick is played at level (completed.length + 1).
+  // Reset by reshuffle; in-memory only.
   completed: [] as string[],
+  // All cities EVER conquered (by name) — the player's permanent "trophy case"
+  // shown on the profile. Only grows; persisted per-player in localStorage
+  // ('buzito.conquered') and NOT wiped by a campaign reshuffle.
+  conquered: [] as string[],
   // True once the player has entered any mission — locks the city reshuffle so
   // an in-progress campaign can't be reset out from under itself.
   campaignStarted: false,
@@ -525,6 +531,36 @@ export const game = $state({
 if (typeof localStorage !== 'undefined') {
   const savedName = localStorage.getItem('buzito.playerName');
   if (savedName) game.playerName = savedName;
+}
+
+// Restore the per-player conquered-cities trophy case (all cities ever beaten).
+if (typeof localStorage !== 'undefined') {
+  try {
+    const c = JSON.parse(localStorage.getItem('buzito.conquered') || 'null');
+    // Dedup on restore: the profile keys {#each} by city name, and Svelte throws
+    // on duplicate keys if corrupt/hand-edited storage ever holds a repeat.
+    if (Array.isArray(c)) {
+      game.conquered = [...new Set(c.filter((x): x is string => typeof x === 'string'))];
+    }
+  } catch {
+    /* ignore corrupt value */
+  }
+}
+
+// Persist the trophy case.
+function saveConquered() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('buzito.conquered', JSON.stringify(game.conquered));
+  }
+}
+
+// Record a city as conquered forever (idempotent). Called when its last arena is
+// beaten, so the profile keeps it across sessions and reshuffles.
+export function recordConquered(city: string) {
+  if (city && !game.conquered.includes(city)) {
+    game.conquered.push(city);
+    saveConquered();
+  }
 }
 
 export function toggleSubmerged() {
@@ -620,6 +656,8 @@ export function markMissionWon() {
   game.won = true;
   if (game.arena >= ARENAS_PER_CITY && game.missionCity && !game.completed.includes(game.missionCity)) {
     game.completed.push(game.missionCity);
+    // Also add to the permanent trophy case shown on the profile.
+    recordConquered(game.missionCity);
   }
 }
 
@@ -655,6 +693,12 @@ export function goToSubScreen() {
 // Back to the intro screen (clicking the "buzito" title).
 export function goToIntro() {
   game.screen = 'intro';
+}
+
+// The player's profile (name, submarine, conquered cities). Returning players
+// land here from "Iniciar Juego".
+export function goToProfile() {
+  game.screen = 'profile';
 }
 
 // Restart after sinking: fresh hull, back to the arena center, progress

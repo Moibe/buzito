@@ -13,6 +13,7 @@
     goToLevelSelect,
     goToSubScreen,
     goToIntro,
+    goToProfile,
     reshuffleMissions,
     ARENAS_PER_CITY,
     SUB_DETAILS,
@@ -23,6 +24,7 @@
   } from '$lib/game.svelte';
   import SubPreview from '$lib/SubPreview.svelte';
   import IntroScene from '$lib/IntroScene.svelte';
+  import CityThumb from '$lib/CityThumb.svelte';
   import { MISSIONS } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
 
@@ -35,21 +37,39 @@
   // Two-step confirm for the "Salir" (reset campaign) button.
   let confirmingExit = $state(false);
 
-  // "Iniciar Juego" → name modal, then the sub screen.
+  // "Iniciar Juego" flow + the player-name modal.
   let showNameModal = $state(false);
   let nameInput = $state('');
+  // Whether confirming the name should advance to the sub screen (first-timer
+  // flow) or just save it in place (editing from the profile).
+  let nameGoSub = $state(false);
   let nameField = $state.raw<HTMLInputElement | undefined>(undefined);
   $effect(() => {
     if (showNameModal) nameField?.focus();
   });
-  function openNameModal() {
+  // Start: a returning player (already has a saved name) goes straight to their
+  // profile; a first-timer is asked for a name, then continues to customization.
+  function startGame() {
+    if (game.playerName) {
+      goToProfile();
+    } else {
+      nameInput = '';
+      nameGoSub = true;
+      showNameModal = true;
+    }
+  }
+  // Edit the name from the profile (stays on the profile after saving).
+  function editName() {
     nameInput = game.playerName;
+    nameGoSub = false;
     showNameModal = true;
   }
   function confirmName() {
-    setPlayerName(nameInput.trim());
+    const n = nameInput.trim();
+    if (!n) return; // a name is required to proceed
+    setPlayerName(n);
     showNameModal = false;
-    game.screen = 'sub';
+    if (nameGoSub) game.screen = 'sub';
   }
 
   const hpPct = $derived(
@@ -87,29 +107,48 @@
         <h1 class="intro-title">buzito</h1>
         <p class="intro-tag">Sumérgete · Descubre · Conquista</p>
       </div>
-      <button class="intro-start" onclick={openNameModal}>Iniciar Juego</button>
+      <button class="intro-start" onclick={startGame}>Iniciar Juego</button>
+    </div>
+  </div>
+{:else if game.screen === 'profile'}
+  <!-- Player profile: name, submarine, and the cities conquered so far. -->
+  <div class="subscreen profilescreen">
+    <button type="button" class="ls-title" title="Volver al inicio" onclick={goToIntro}>buzito</button>
+
+    <div class="prof-top">
+      <div class="sub-preview prof-sub">
+        <Canvas>
+          <SubPreview color={config.sub.color} detailColor={config.sub.detailColor} detail={config.sub.detail} />
+        </Canvas>
+      </div>
+      <div class="prof-id">
+        <span class="prof-hi">Capitán</span>
+        <h2 class="prof-name">
+          {game.playerName || 'Sin nombre'}
+          <button class="prof-edit" title="Cambiar nombre" aria-label="Cambiar nombre" onclick={editName}>✎</button>
+        </h2>
+        <p class="prof-count">
+          🏆 {game.conquered.length}
+          {game.conquered.length === 1 ? 'ciudad conquistada' : 'ciudades conquistadas'}
+        </p>
+        <button class="sub-back" onclick={goToSubScreen}>🎨 Personalizar submarino</button>
+      </div>
     </div>
 
-    {#if showNameModal}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="name-backdrop" onclick={() => (showNameModal = false)}>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="name-modal" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-          <h2>Nombre del Jugador</h2>
-          <input
-            bind:this={nameField}
-            bind:value={nameInput}
-            type="text"
-            placeholder="Tu nombre"
-            maxlength="24"
-            onkeydown={(e) => e.key === 'Enter' && confirmName()}
-          />
-          <button class="name-go" onclick={confirmName}>Zarpar ⚓</button>
-        </div>
+    <h3 class="prof-section">Ciudades conquistadas</h3>
+    {#if game.conquered.length > 0}
+      <div class="prof-cities">
+        {#each game.conquered as city (city)}
+          <CityThumb name={city} />
+        {/each}
       </div>
+    {:else}
+      <p class="prof-empty">
+        Aún no has conquistado ninguna ciudad.<br />¡Zarpa y libera tu primera!
+      </p>
     {/if}
+
+    <button class="ls-reroll continue" onclick={goToLevelSelect}>Zarpar a la campaña →</button>
   </div>
 {:else if game.screen === 'sub'}
   <!-- Submarine choice & customization, shown before the city picker. -->
@@ -341,6 +380,29 @@
 {/if}
 {/if}
 
+<!-- Player-name modal — top-level so it can overlay the intro (first-timer) or
+     the profile (editing the name). -->
+{#if showNameModal}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="name-backdrop" onclick={() => (showNameModal = false)}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="name-modal" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <h2>Nombre del Jugador</h2>
+      <input
+        bind:this={nameField}
+        bind:value={nameInput}
+        type="text"
+        placeholder="Tu nombre"
+        maxlength="24"
+        onkeydown={(e) => e.key === 'Enter' && confirmName()}
+      />
+      <button class="name-go" onclick={confirmName}>{nameGoSub ? 'Zarpar ⚓' : 'Guardar'}</button>
+    </div>
+  </div>
+{/if}
+
 <style>
   :global(html, body) {
     margin: 0;
@@ -562,6 +624,100 @@
     background: rgba(10, 25, 40, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.12);
     overflow: hidden;
+  }
+
+  /* --- Player profile screen --- */
+  .profilescreen {
+    justify-content: flex-start;
+    padding: max(4vh, 20px) 16px 36px;
+    gap: 18px;
+    overflow-y: auto;
+  }
+  .prof-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    width: min(720px, 92vw);
+  }
+  .prof-sub {
+    width: min(340px, 84vw);
+    height: 200px;
+    flex-shrink: 0;
+  }
+  .prof-id {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 7px;
+    min-width: 200px;
+  }
+  .prof-hi {
+    font: 700 12px/1 system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #ffd700;
+    opacity: 0.9;
+  }
+  .prof-name {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    font: 800 32px/1.05 system-ui, sans-serif;
+    text-shadow: 0 0 14px rgba(255, 255, 255, 0.18);
+    word-break: break-word;
+  }
+  .prof-edit {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 20, 30, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .prof-edit:hover {
+    background: rgba(10, 20, 30, 0.8);
+    border-color: rgba(255, 215, 0, 0.7);
+    color: #ffd700;
+  }
+  .prof-count {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.82);
+    font: 600 15px/1 system-ui, sans-serif;
+  }
+  .prof-section {
+    width: min(720px, 92vw);
+    margin: 6px 0 0;
+    text-align: left;
+    color: rgba(255, 255, 255, 0.9);
+    font: 700 15px/1 system-ui, sans-serif;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    padding-bottom: 8px;
+  }
+  .prof-cities {
+    width: min(720px, 92vw);
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .prof-empty {
+    width: min(720px, 92vw);
+    margin: 8px 0;
+    color: rgba(255, 255, 255, 0.6);
+    font: 500 15px/1.5 system-ui, sans-serif;
+    font-style: italic;
   }
   .sub-colors {
     display: flex;
