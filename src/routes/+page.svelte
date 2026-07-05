@@ -45,7 +45,7 @@
   // board, leaving an 8px left inset + ~10px gap before the board (so it doesn't
   // touch the arena). Clamped so it stays readable on narrow screens (where it
   // may spill a little over the board edge).
-  const statsWidth = $derived(Math.round(Math.max(126, Math.min(230, game.boardLeftPx - 18))));
+  const statsWidth = $derived(Math.round(Math.max(138, Math.min(240, game.boardLeftPx - 14))));
   // Two-step confirm for the "Salir" (reset campaign) button.
   let confirmingExit = $state(false);
 
@@ -331,7 +331,7 @@
     {#if cityFlagCode(game.missionCity)}
       <span class="fi fi-{cityFlagCode(game.missionCity)} stat-flag" title={cityCountry(game.missionCity)} aria-hidden="true"></span>
     {/if}
-    <span class="lvl-badge">{game.missionCity}</span>
+    <span class="lvl-badge" title={game.missionCity}>{game.missionCity}</span>
   </div>
   <div class="stat-sub">Nivel {game.level} · Arena {game.arena}/{ARENAS_PER_CITY}</div>
   <div class="stat-row" style="margin-top: 10px;">
@@ -1248,14 +1248,18 @@
   .stats-title {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 6px 8px;
+    flex-wrap: nowrap;
+    gap: 7px;
   }
   .lvl-badge {
+    min-width: 0;
     font-weight: 800;
     font-size: 15px;
     color: #fff3b8;
     letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   /* Country flag beside the city title. */
   .stat-flag {
