@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { Canvas } from '@threlte/core';
   import Scene from '$lib/Scene.svelte';
   import {
@@ -33,6 +34,11 @@
   import type { BonusType } from '$lib/missions';
   import type { EnemyType } from '$lib/game.svelte';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
+  import { musicState, initMusic, setMusicForScreen, toggleMute } from '$lib/music.svelte';
+
+  // Music: start on first gesture (autoplay policy), then pick calm/lively by screen.
+  onMount(initMusic);
+  $effect(() => setMusicForScreen(game.screen));
 
   // Campaign progress: the NEXT city picked is played at this level.
   const nextLevel = $derived(Math.min(MISSIONS.length, game.completed.length + 1));
@@ -522,6 +528,16 @@
   </div>
 {/if}
 
+<!-- Global music mute toggle (all screens). -->
+<button
+  class="mute-btn"
+  onclick={toggleMute}
+  title={musicState.muted ? 'Activar música' : 'Silenciar música'}
+  aria-label={musicState.muted ? 'Activar música' : 'Silenciar música'}
+>
+  {musicState.muted ? '🔇' : '🔊'}
+</button>
+
 <style>
   :global(html, body) {
     margin: 0;
@@ -540,6 +556,32 @@
   .scene {
     position: fixed;
     inset: 0;
+  }
+  /* Global music mute toggle — bottom-right, above every overlay. */
+  .mute-btn {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 40;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 20, 30, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .mute-btn:hover {
+    background: rgba(20, 45, 68, 0.85);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
   }
   .hud {
     position: fixed;

@@ -363,21 +363,26 @@
   // 1/(zoom·sin(pitch)) along the depth axis. Re-fit on resize so the arena
   // stays fully framed at any window size (bigger window → bigger tiles, not
   // more tiles). Imperative + updateProjectionMatrix for immediate effect.
+  // A small rightward nudge of the board into the leftover right-side space, so
+  // the left strip (stats card) gets a bit more room. Clamped to never eat the
+  // whole right margin.
+  const BOARD_NUDGE_RIGHT = 55;
   $effect(() => {
     const c = cam;
     if (!c) return;
     const fit = () => {
-      c.zoom =
-        FIT_MARGIN *
-        Math.min(
-          window.innerWidth / (2 * FIT_HALF_H),
-          window.innerHeight / (2 * FIT_HALF_V)
-        );
-      c.updateProjectionMatrix();
-      // Publish the left margin (empty strip beside the centered board) so the
-      // HUD can dock its side panel there.
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      c.zoom = FIT_MARGIN * Math.min(W / (2 * FIT_HALF_H), H / (2 * FIT_HALF_V));
       const boardW = 2 * FIT_HALF_H * c.zoom;
-      game.boardLeftPx = Math.max(0, (window.innerWidth - boardW) / 2);
+      const centeredMargin = Math.max(0, (W - boardW) / 2);
+      // Shift right by nudge, but keep at least 20px of margin on the right.
+      const shift = Math.max(0, Math.min(BOARD_NUDGE_RIGHT, centeredMargin - 20));
+      if (shift > 0.5) c.setViewOffset(W, H, -shift, 0, W, H);
+      else c.clearViewOffset();
+      c.updateProjectionMatrix();
+      // Left strip (where the stats card docks) grew by the shift.
+      game.boardLeftPx = centeredMargin + shift;
     };
     fit();
     window.addEventListener('resize', fit);
