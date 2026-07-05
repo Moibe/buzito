@@ -328,9 +328,12 @@
      its width adapting to that strip (game.boardLeftPx). -->
 <div class="stats" style="width: {statsWidth}px">
   <div class="stats-title">
-    <span class="lvl-badge">Nivel {game.level}</span>
+    {#if cityFlagCode(game.missionCity)}
+      <span class="fi fi-{cityFlagCode(game.missionCity)} stat-flag" title={cityCountry(game.missionCity)} aria-hidden="true"></span>
+    {/if}
+    <span class="lvl-badge">{game.missionCity}</span>
   </div>
-  <div class="stat-sub">🎯 {game.missionCity} · Arena {game.arena}/{ARENAS_PER_CITY}</div>
+  <div class="stat-sub">Nivel {game.level} · Arena {game.arena}/{ARENAS_PER_CITY}</div>
   <div class="stat-row" style="margin-top: 10px;">
     <span class="stat-label">Vidas</span>
     <span class="stat-value lives-hearts">
@@ -1253,6 +1256,13 @@
     font-size: 15px;
     color: #fff3b8;
     letter-spacing: 0.02em;
+  }
+  /* Country flag beside the city title. */
+  .stat-flag {
+    font-size: 17px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
   }
   .stat-sub {
     font-size: 12px;
