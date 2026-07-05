@@ -1,4 +1,4 @@
-import { pickRandomCities } from './cities';
+import { pickRandomCities, WORLD_CITIES } from './cities';
 import { MISSIONS, ENEMY_INFO, BONUS_INFO } from './missions';
 import type { Bonuses, BonusType } from './missions';
 
@@ -352,6 +352,9 @@ export const game = $state({
   campaignStarted: false,
   // The city of the mission currently being played (set by startMission).
   missionCity: '',
+  // Its 1-based index in WORLD_CITIES → the key for its stored images (the
+  // arena reveals this city's image #1 as tiles are covered). 0 = none.
+  missionCityN: 0,
   // Difficulty multiplier of the current mission (Scene scales enemy stats by
   // this; 1 = baseline). Set by startLevel from the missions table.
   missionPower: 1,
@@ -480,6 +483,7 @@ export function startMission(city: string) {
   game.level = level;
   game.campaignStarted = true;
   game.missionCity = city;
+  game.missionCityN = WORLD_CITIES.indexOf(city) + 1; // 0 if not found
   game.missionPower = MISSIONS[level - 1].power;
   resetGame();
   respawnEnemies();

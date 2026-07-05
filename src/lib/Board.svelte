@@ -17,6 +17,7 @@
     seed = 1,
     visited = undefined as Set<string> | undefined,
     visitedCount = 0,
+    reveal = false,
   }: {
     halfU?: number;
     halfV?: number;
@@ -24,6 +25,7 @@
     seed?: number;
     visited?: Set<string>;
     visitedCount?: number;
+    reveal?: boolean;
   } = $props();
 
   const TILE_HEIGHT = 0.4;
@@ -84,9 +86,13 @@
 
     for (let i = 0; i < n; i++) {
       const cell = cells[i];
+      // In reveal mode, a visited tile is HIDDEN (scaled to 0) so the city
+      // image beneath shows through — the sub "uncovers" the picture.
+      const hidden = reveal && (visited?.has(`${cell.q},${cell.r}`) ?? false);
+      const s = hidden ? 0 : 1;
       dummy.position.set(cell.x, cell.height / 2 + waveAt(cell.x, cell.z), cell.z);
       dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(1, 1, 1);
+      dummy.scale.set(s, s, s);
       dummy.updateMatrix();
       inst.setMatrixAt(i, dummy.matrix);
     }

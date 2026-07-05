@@ -2,10 +2,11 @@
   import { T, useTask } from '@threlte/core';
   import { interactivity } from '@threlte/extras';
   import { untrack } from 'svelte';
-  import { BackSide, Vector3 } from 'three';
+  import { BackSide, DoubleSide, SRGBColorSpace, TextureLoader, Vector3 } from 'three';
   import type {
     DirectionalLight as ThreeDirLight,
     OrthographicCamera as ThreeOrthoCam,
+    Texture as ThreeTexture,
   } from 'three';
   import Board from './Board.svelte';
   import Submarine from './Submarine.svelte';
@@ -92,6 +93,36 @@
   const bonuses = $derived(
     config.missionBonuses[game.level - 1] ?? { line: 0, xstar: 0, star: 0 }
   );
+
+  // --- Arena image (the city's image #1, revealed as tiles are covered) ---
+  // Fetch the current city's slot-1 filename, load it as a texture, and show it
+  // under the tiles. Board hides visited tiles so the picture shows through.
+  const ARENA_IMG_Y = 0.36; // just under the tile tops
+  let arenaTex = $state.raw<ThreeTexture | undefined>(undefined);
+  $effect(() => {
+    const n = game.missionCityN;
+    arenaTex = undefined;
+    if (!n) return;
+    let cancelled = false;
+    fetch(`/api/cities/${n}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const f = d?.slots?.[0];
+        if (cancelled || !f) return;
+        new TextureLoader().load(`/api/cities/${n}/${f}`, (tex) => {
+          if (cancelled) {
+            tex.dispose();
+            return;
+          }
+          tex.colorSpace = SRGBColorSpace;
+          arenaTex = tex;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  });
 
   // Size of each hex in world units. Bigger TILE_SIZE → bigger tiles AND a
   // bigger submarine (SUB_SCALE tracks it), and — because the arena's world
@@ -1580,7 +1611,17 @@
 />
 <T.HemisphereLight args={['#ffe9c2', '#3a2a1a', 0.4]} />
 
-<Board halfU={ARENA_HALF_U} halfV={ARENA_HALF_V} tileSize={TILE_SIZE} seed={7} visited={game.visited} visitedCount={game.visitedCount} />
+<!-- City image beneath the tiles — revealed hex by hex as they're covered. -->
+{#if arenaTex}
+  <T.Group rotation={[0, -Math.PI / 4, 0]}>
+    <T.Mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, ARENA_IMG_Y, 0]}>
+      <T.PlaneGeometry args={[2 * FRAME_U, 2 * FRAME_V]} />
+      <T.MeshBasicMaterial map={arenaTex} side={DoubleSide} toneMapped={false} />
+    </T.Mesh>
+  </T.Group>
+{/if}
+
+<Board halfU={ARENA_HALF_U} halfV={ARENA_HALF_V} tileSize={TILE_SIZE} seed={7} visited={game.visited} visitedCount={game.visitedCount} reveal={!!arenaTex} />
 
 <!-- The wide band that frames the play area and hides the ragged tile edge. -->
 <ArenaFrame
