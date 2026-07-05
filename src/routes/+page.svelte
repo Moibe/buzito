@@ -152,7 +152,7 @@
       </p>
     {/if}
 
-    <button class="ls-reroll continue" onclick={goToLevelSelect}>Zarpar a la campaña →</button>
+    <button class="ls-reroll continue" onclick={goToLevelSelect}>Iniciar Campaña →</button>
   </div>
 {:else if game.screen === 'sub'}
   <!-- Submarine choice & customization, shown before the city picker. -->
