@@ -55,7 +55,7 @@
       const bonuses = config.missionBonuses[i] ?? m.bonuses;
       const newBonuses = BONUS_LIST.map(([b]) => b).filter((b) => bonuses[b] > 0 && !seenB.has(b));
       newBonuses.forEach((b) => seenB.add(b));
-      return { n: m.n, label: m.label, power: m.power, note: m.note, enemies, newTypes, total, bonuses, newBonuses };
+      return { n: m.n, label: m.label, powers: m.powers, note: m.note, enemies, newTypes, total, bonuses, newBonuses };
     });
   });
 
@@ -246,11 +246,16 @@
                   <strong>Misión {m.n}</strong>
                   <span class="mlabel">{m.label}</span>
                 </div>
-                <span class="power" title="Multiplicador aplicado a casco / embestida / daño / cadencia / velocidad">
-                  Poder ×{m.power}
-                </span>
               </div>
               <div class="diffbar"><span style="width: {(m.n / MISSIONS.length) * 100}%"></span></div>
+
+              <!-- Power ramps across the mission's 4 arenas (one chip each). -->
+              <div class="powers" title="Multiplicador de poder en cada arena (casco / embestida / daño / cadencia / velocidad)">
+                <span class="powers-label">Poder</span>
+                {#each m.powers as p, k}
+                  <span class="pw">A{k + 1} <b>×{p}</b></span>
+                {/each}
+              </div>
               <div class="enemies">
                 {#each m.enemies as e}
                   <button
@@ -686,16 +691,31 @@
     font-size: 12px;
     color: rgba(255, 255, 255, 0.65);
   }
-  .power {
-    margin-left: auto;
+  .powers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 10px 0 2px;
+  }
+  .powers-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 700;
+  }
+  .pw {
     background: rgba(255, 215, 0, 0.14);
     border: 1px solid rgba(255, 215, 0, 0.5);
     color: #ffe680;
     font-size: 12px;
-    font-weight: 700;
-    padding: 3px 10px;
+    padding: 3px 9px;
     border-radius: 999px;
     white-space: nowrap;
+  }
+  .pw b {
+    color: #fff;
   }
   .diffbar {
     height: 5px;

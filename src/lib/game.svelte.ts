@@ -310,7 +310,7 @@ function missionSpawnTiles(count: number): { q: number; r: number }[] {
 // Build the enemy roster for mission n (1..8) from the difficulty table: each
 // listed type × its count, placed on spread spawn tiles, with hull scaled by
 // the mission's power multiplier ("características más filosas").
-function makeEnemiesForMission(n: number): Enemy[] {
+function makeEnemiesForMission(n: number, power: number): Enemy[] {
   const idx = Math.min(MISSIONS.length, Math.max(1, n)) - 1;
   const m = MISSIONS[idx];
   const composition = config.missionEnemies[idx] ?? m.enemies;
@@ -323,7 +323,7 @@ function makeEnemiesForMission(n: number): Enemy[] {
     // Guard a cleared "Casco" panel field (→ null): keep the enemy alive
     // instead of spawning hp=0 (instantly removed) / NaN bars.
     const baseHp = config.enemies[type].hp > 0 ? config.enemies[type].hp : 1;
-    const hp = Math.max(1, Math.round(baseHp * m.power));
+    const hp = Math.max(1, Math.round(baseHp * power));
     return {
       id: `${type}-${counters[type]}`,
       type,
@@ -391,7 +391,7 @@ export const game = $state({
   totalTiles: 0,
 
   // --- Enemy vessels (roster for the current mission; rebuilt by respawnEnemies) ---
-  enemies: makeEnemiesForMission(1),
+  enemies: makeEnemiesForMission(1, MISSIONS[0].powers[0]),
   // Bumped by respawnEnemies so Scene rebuilds each enemy's live mover
   // (position/state) from the fresh list.
   enemiesEpoch: 0,
@@ -475,7 +475,7 @@ export function healSub(amount: number) {
 // Rebuild the enemy roster from config (fresh full HP at their spawn tiles,
 // dead ones revived). Bumps enemiesEpoch so Scene resets their live movers.
 export function respawnEnemies() {
-  game.enemies = makeEnemiesForMission(game.level);
+  game.enemies = makeEnemiesForMission(game.level, game.missionPower);
   game.enemiesEpoch++;
   closeEnemyMenu();
 }
@@ -490,7 +490,7 @@ export function startMission(city: string) {
   game.missionCity = city;
   game.missionCityN = WORLD_CITIES.indexOf(city) + 1; // 0 if not found
   game.arena = 1;
-  game.missionPower = MISSIONS[level - 1].power;
+  game.missionPower = MISSIONS[level - 1].powers[0]; // arena 1 power
   resetGame();
   respawnEnemies();
   game.screen = 'play';
@@ -510,8 +510,10 @@ export function markMissionWon() {
 export function advanceArena() {
   if (game.arena >= ARENAS_PER_CITY) return;
   game.arena += 1;
+  // Each arena ramps the power up (arena 1..4 → powers[0..3]).
+  game.missionPower = MISSIONS[game.level - 1].powers[game.arena - 1];
   resetGame(); // fresh sub, cleared coverage, won=false
-  respawnEnemies(); // same level's roster
+  respawnEnemies(); // same roster, sharper stats for this arena
 }
 
 // Draw a fresh random set of 8 cities and restart the campaign progress.

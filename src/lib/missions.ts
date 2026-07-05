@@ -24,7 +24,7 @@ export type MissionEnemy = { type: EnemyType; count: number };
 export type Mission = {
   n: number; // 1..8
   label: string; // human difficulty label
-  power: number; // stat multiplier applied to enemy characteristics ("filo")
+  powers: number[]; // stat multiplier for each of the 4 arenas (ramps up)
   enemies: MissionEnemy[]; // which types + how many
   bonuses: Bonuses; // how many of each liberator power-up
   note: string; // short summary of the twist
@@ -42,7 +42,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
   {
     n: 1,
     label: 'Muy fácil',
-    power: 0.9,
+    powers: [0.9, 1.01, 1.12, 1.22],
     enemies: [{ type: 'cargo', count: 1 }],
     bonuses: { health: 2, line: 1, xstar: 0, star: 0 },
     note: 'Un solo Carguero que patrulla y embiste. Para aprender a moverte y cubrir mosaicos.',
@@ -50,7 +50,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
   {
     n: 2,
     label: 'Fácil',
-    power: 1.0,
+    powers: [1.0, 1.12, 1.24, 1.36],
     enemies: [
       { type: 'cargo', count: 1 },
       { type: 'warship', count: 1 },
@@ -61,7 +61,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
   {
     n: 3,
     label: 'Ligera',
-    power: 1.1,
+    powers: [1.1, 1.23, 1.36, 1.5],
     enemies: [
       { type: 'cargo', count: 2 },
       { type: 'warship', count: 1 },
@@ -73,7 +73,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
   {
     n: 4,
     label: 'Media',
-    power: 1.25,
+    powers: [1.25, 1.4, 1.55, 1.7],
     enemies: [
       { type: 'cargo', count: 2 },
       { type: 'warship', count: 2 },
@@ -86,7 +86,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
   {
     n: 5,
     label: 'Difícil',
-    power: 1.4,
+    powers: [1.4, 1.57, 1.74, 1.9],
     enemies: [
       { type: 'cargo', count: 2 },
       { type: 'warship', count: 2 },
@@ -100,7 +100,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
   {
     n: 6,
     label: 'Muy difícil',
-    power: 1.55,
+    powers: [1.55, 1.74, 1.92, 2.11],
     enemies: [
       { type: 'cargo', count: 2 },
       { type: 'warship', count: 2 },
@@ -115,7 +115,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
   {
     n: 7,
     label: 'Brutal',
-    power: 1.75,
+    powers: [1.75, 1.96, 2.17, 2.38],
     enemies: [
       { type: 'cargo', count: 2 },
       { type: 'warship', count: 3 },
@@ -130,7 +130,7 @@ const RAW: Omit<Mission, 'newTypes' | 'newBonuses' | 'total'>[] = [
   {
     n: 8,
     label: 'Extrema',
-    power: 2.0,
+    powers: [2.0, 2.24, 2.48, 2.72],
     enemies: [
       { type: 'cargo', count: 2 },
       { type: 'warship', count: 3 },
