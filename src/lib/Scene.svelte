@@ -97,13 +97,16 @@
   // --- Arena image (the city's image #1, revealed as tiles are covered) ---
   // Fetch the current city's slot-1 filename, load it as a texture, and show it
   // under the tiles. Board hides visited tiles so the picture shows through.
-  const ARENA_IMG_Y = 0.36; // just under the tile tops
+  // Must sit BELOW the lowest tile top: tops bob 0.4 ± wave(0.06) = 0.34..0.46,
+  // so a plane above 0.34 pokes through the wave troughs (image bleeds in bands).
+  const ARENA_IMG_Y = 0.28;
   let arenaTex = $state.raw<ThreeTexture | undefined>(undefined);
   $effect(() => {
     const n = game.missionCityN;
     arenaTex = undefined;
     if (!n) return;
     let cancelled = false;
+    let loaded: ThreeTexture | undefined;
     fetch(`/api/cities/${n}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -115,12 +118,15 @@
             return;
           }
           tex.colorSpace = SRGBColorSpace;
+          loaded = tex;
           arenaTex = tex;
         });
       })
       .catch(() => {});
+    // Free the previous mission's texture on switch/unmount (frees GPU memory).
     return () => {
       cancelled = true;
+      loaded?.dispose();
     };
   });
 
@@ -1613,7 +1619,7 @@
 
 <!-- City image beneath the tiles — revealed hex by hex as they're covered. -->
 {#if arenaTex}
-  <T.Group rotation={[0, -Math.PI / 4, 0]}>
+  <T.Group rotation={[0, Math.PI / 4, 0]}>
     <T.Mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, ARENA_IMG_Y, 0]}>
       <T.PlaneGeometry args={[2 * FRAME_U, 2 * FRAME_V]} />
       <T.MeshBasicMaterial map={arenaTex} side={DoubleSide} toneMapped={false} />
