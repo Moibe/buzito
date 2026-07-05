@@ -1,5 +1,6 @@
 import { pickRandomCities } from './cities';
-import { MISSIONS, ENEMY_INFO } from './missions';
+import { MISSIONS, ENEMY_INFO, BONUS_INFO } from './missions';
+import type { Bonuses, BonusType } from './missions';
 
 export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark' | 'minelayer';
 
@@ -42,6 +43,10 @@ export type Enemy = {
 function baseMissionEnemies(): { type: EnemyType; count: number }[][] {
   return MISSIONS.map((m) => m.enemies.map((e) => ({ type: e.type, count: e.count })));
 }
+// Fresh copy of the base per-mission bonus (power-up) counts.
+function baseMissionBonuses(): Bonuses[] {
+  return MISSIONS.map((m) => ({ ...m.bonuses }));
+}
 
 export const config = $state({
   sub: { hp: 50, speed: 3.0, turnRate: 1.8 },
@@ -51,15 +56,14 @@ export const config = $state({
   // Editable per-mission enemy composition (admin drag-to-add). Starts as the
   // base table; persisted so edits reach the game.
   missionEnemies: baseMissionEnemies(),
+  // Editable per-mission bonus (power-up) counts. Admin-controlled + persisted.
+  missionBonuses: baseMissionBonuses(),
   pickup: { heal: 12, respawn: 180 },
-  // Shiny asterisk power-ups: collecting one "liberates" (marks visited) every
-  // tile along its horizontal, vertical and both diagonal lines on screen.
-  stars: { count: 3, respawn: 25 },
-  // X power-ups: like stars but liberate only the two diagonal lines of an X,
-  // at each one's own random angle.
-  xstars: { count: 3, respawn: 25 },
-  // Line power-ups: liberate a SINGLE line, at each one's own random angle.
-  linestars: { count: 3, respawn: 25 },
+  // Power-up respawn delays (seconds). The per-mission COUNTS live in
+  // config.missionBonuses; here we keep only the shared respawn cadence.
+  stars: { respawn: 25 },
+  xstars: { respawn: 25 },
+  linestars: { respawn: 25 },
   // --- Player sub upgrades/abilities (the LEFT tuning panel binds to this).
   // Each has an `enabled` toggle so they can be switched on/off to test. ---
   player: {
@@ -125,14 +129,28 @@ function isValidMissionEnemies(v: unknown): v is { type: EnemyType; count: numbe
   return true;
 }
 
+// Validate a mission-bonuses override (server data could be stale/corrupt).
+function isValidMissionBonuses(v: unknown): v is Bonuses[] {
+  if (!Array.isArray(v) || v.length !== MISSIONS.length) return false;
+  for (const b of v) {
+    if (typeof b !== 'object' || b === null) return false;
+    const bb = b as Record<string, unknown>;
+    for (const k of Object.keys(BONUS_INFO)) {
+      if (typeof bb[k] !== 'number' || (bb[k] as number) < 0) return false;
+    }
+  }
+  return true;
+}
+
 // Apply settings coming from the SERVER (the source of truth, loaded via the
 // root layout). Validated before use.
 export function applyServerSettings(
-  s: { winPct?: unknown; missionEnemies?: unknown } | null | undefined
+  s: { winPct?: unknown; missionEnemies?: unknown; missionBonuses?: unknown } | null | undefined
 ) {
   if (!s) return;
   if (typeof s.winPct === 'number' && s.winPct > 0 && s.winPct <= 1) config.rules.winPct = s.winPct;
   if (isValidMissionEnemies(s.missionEnemies)) config.missionEnemies = s.missionEnemies;
+  if (isValidMissionBonuses(s.missionBonuses)) config.missionBonuses = s.missionBonuses;
 }
 
 // Save status the admin UI can show, so a failed write (e.g. expired session →
@@ -151,7 +169,11 @@ async function saveSettingsToServer() {
     const res = await fetch('/api/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ winPct: config.rules.winPct, missionEnemies: config.missionEnemies }),
+      body: JSON.stringify({
+        winPct: config.rules.winPct,
+        missionEnemies: config.missionEnemies,
+        missionBonuses: config.missionBonuses,
+      }),
     });
     adminSync.status = res.ok ? 'saved' : 'error';
   } catch {
@@ -192,9 +214,19 @@ export function removeEnemyFromMission(missionIndex: number, type: string) {
   if (list[idx].count <= 0) list.splice(idx, 1);
   saveSettingsToServer();
 }
-// Restore every mission to the base difficulty table.
+// Change a mission's count of a bonus type by delta (clamped), then persist.
+const MAX_BONUS_PER_TYPE = 12;
+export function adjustMissionBonus(missionIndex: number, type: BonusType, delta: number) {
+  const b = config.missionBonuses[missionIndex];
+  if (!b || !(type in BONUS_INFO)) return;
+  b[type] = Math.max(0, Math.min(MAX_BONUS_PER_TYPE, (b[type] ?? 0) + delta));
+  saveSettingsToServer();
+}
+
+// Restore every mission to the base difficulty table (enemies + bonuses).
 export function resetMissions() {
   config.missionEnemies = baseMissionEnemies();
+  config.missionBonuses = baseMissionBonuses();
   saveSettingsToServer();
 }
 

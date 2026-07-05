@@ -87,6 +87,12 @@
   }
   const ep = $derived(scaleEnemies(config.enemies, game.missionPower));
 
+  // The current mission's bonus (power-up) counts — how many of each liberator
+  // spawn. Admin-controlled per mission (config.missionBonuses), 0 if none.
+  const bonuses = $derived(
+    config.missionBonuses[game.level - 1] ?? { line: 0, xstar: 0, star: 0 }
+  );
+
   // Size of each hex in world units. Bigger TILE_SIZE → bigger tiles AND a
   // bigger submarine (SUB_SCALE tracks it), and — because the arena's world
   // extent below is fixed — FEWER tiles. The zoom-fit frames that fixed
@@ -803,9 +809,9 @@
   );
   let starRespawnTimer = 0;
 
-  // Spawn config.stars.count stars on random tile centers; deactivate the rest.
+  // Spawn the mission's star count on random tile centers; deactivate the rest.
   function spawnStars() {
-    const count = Math.max(0, Math.min(stars.length, Math.round(config.stars.count)));
+    const count = Math.max(0, Math.min(stars.length, Math.round(bonuses.star)));
     for (let i = 0; i < stars.length; i++) {
       if (i < count) {
         const p = randomArenaPoint();
@@ -829,7 +835,7 @@
   );
   let xstarRespawnTimer = 0;
   function spawnXStars() {
-    const count = Math.max(0, Math.min(xstars.length, Math.round(config.xstars.count)));
+    const count = Math.max(0, Math.min(xstars.length, Math.round(bonuses.xstar)));
     for (let i = 0; i < xstars.length; i++) {
       if (i < count) {
         const p = randomArenaPoint();
@@ -853,7 +859,7 @@
   );
   let linestarRespawnTimer = 0;
   function spawnLineStars() {
-    const count = Math.max(0, Math.min(linestars.length, Math.round(config.linestars.count)));
+    const count = Math.max(0, Math.min(linestars.length, Math.round(bonuses.line)));
     for (let i = 0; i < linestars.length; i++) {
       if (i < count) {
         const p = randomArenaPoint();
@@ -1448,7 +1454,7 @@
         }
         if (!stars.some((s) => s.active)) starRespawnTimer = config.stars.respawn;
       }
-    } else if (!game.gameOver) {
+    } else if (!game.gameOver && bonuses.star > 0) {
       starRespawnTimer -= delta;
       if (starRespawnTimer <= 0) spawnStars();
     }
@@ -1469,7 +1475,7 @@
         }
         if (!xstars.some((s) => s.active)) xstarRespawnTimer = config.xstars.respawn;
       }
-    } else if (!game.gameOver) {
+    } else if (!game.gameOver && bonuses.xstar > 0) {
       xstarRespawnTimer -= delta;
       if (xstarRespawnTimer <= 0) spawnXStars();
     }
@@ -1490,7 +1496,7 @@
         }
         if (!linestars.some((s) => s.active)) linestarRespawnTimer = config.linestars.respawn;
       }
-    } else if (!game.gameOver) {
+    } else if (!game.gameOver && bonuses.line > 0) {
       linestarRespawnTimer -= delta;
       if (linestarRespawnTimer <= 0) spawnLineStars();
     }

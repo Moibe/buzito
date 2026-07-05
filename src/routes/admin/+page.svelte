@@ -1,7 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import AdminSidebar from '$lib/AdminSidebar.svelte';
-  import { MISSIONS, ENEMY_INFO } from '$lib/missions';
+  import { MISSIONS, ENEMY_INFO, BONUS_INFO } from '$lib/missions';
+  import type { BonusType } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
   import {
     config,
@@ -9,8 +10,12 @@
     addEnemyToMission,
     removeEnemyFromMission,
     resetMissions,
+    adjustMissionBonus,
     adminSync,
   } from '$lib/game.svelte';
+
+  // Typed [type, info] list of bonuses for the per-mission steppers.
+  const BONUS_LIST = Object.entries(BONUS_INFO) as [BonusType, { name: string; emoji: string }][];
 
   // Human text for the save-status indicator.
   const saveText: Record<string, string> = {
@@ -30,13 +35,17 @@
   // Live mission view: static label/power/note merged with the EDITABLE enemy
   // composition (config.missionEnemies), with newTypes/total recomputed.
   const missionsView = $derived.by(() => {
-    const seen = new Set<string>();
+    const seenE = new Set<string>();
+    const seenB = new Set<string>();
     return MISSIONS.map((m, i) => {
       const enemies = config.missionEnemies[i] ?? m.enemies;
-      const newTypes = enemies.map((e) => e.type).filter((t) => !seen.has(t));
-      newTypes.forEach((t) => seen.add(t));
+      const newTypes = enemies.map((e) => e.type).filter((t) => !seenE.has(t));
+      newTypes.forEach((t) => seenE.add(t));
       const total = enemies.reduce((s, e) => s + e.count, 0);
-      return { n: m.n, label: m.label, power: m.power, note: m.note, enemies, newTypes, total };
+      const bonuses = config.missionBonuses[i] ?? m.bonuses;
+      const newBonuses = BONUS_LIST.map(([b]) => b).filter((b) => bonuses[b] > 0 && !seenB.has(b));
+      newBonuses.forEach((b) => seenB.add(b));
+      return { n: m.n, label: m.label, power: m.power, note: m.note, enemies, newTypes, total, bonuses, newBonuses };
     });
   });
 
@@ -211,6 +220,31 @@
                 {/if}
                 <span class="total">{m.total} en total</span>
               </div>
+
+              <!-- Bonuses (power-ups) per mission, with +/- steppers. -->
+              <div class="bonuses">
+                <span class="bonuses-label">Bonos</span>
+                {#each BONUS_LIST as [type, info]}
+                  <div class="bonus" class:isnew={m.newBonuses.includes(type)}>
+                    <span class="chip-emoji">{info.emoji}</span>
+                    <span class="bonus-name">{info.name}</span>
+                    <div class="stepper">
+                      <button
+                        type="button"
+                        aria-label="Quitar {info.name}"
+                        onclick={() => adjustMissionBonus(i, type, -1)}>−</button
+                      >
+                      <b>{m.bonuses[type]}</b>
+                      <button
+                        type="button"
+                        aria-label="Añadir {info.name}"
+                        onclick={() => adjustMissionBonus(i, type, 1)}>+</button
+                      >
+                    </div>
+                  </div>
+                {/each}
+              </div>
+
               <p class="mnote">{m.note}</p>
             </article>
           {/each}
@@ -646,6 +680,68 @@
     font-style: italic;
     color: rgba(255, 255, 255, 0.45);
   }
+  /* Per-mission bonuses (power-up) steppers. */
+  .bonuses {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  }
+  .bonuses-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 700;
+  }
+  .bonus {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    padding: 3px 6px 3px 10px;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .bonus.isnew {
+    border-color: rgba(147, 197, 253, 0.6);
+    background: rgba(147, 197, 253, 0.12);
+  }
+  .bonus-name {
+    color: rgba(255, 255, 255, 0.75);
+  }
+  .stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stepper button {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 6px;
+    color: #fff;
+    font: 700 14px/1 system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .stepper button:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  .stepper b {
+    min-width: 12px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
   .mnote {
     margin: 10px 0 0;
     font-size: 12.5px;
