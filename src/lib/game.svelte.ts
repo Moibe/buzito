@@ -19,6 +19,26 @@ export const SUB_DETAILS: { id: string; name: string }[] = [
   { id: 'nose', name: 'Proa' },
 ];
 
+// The submarine "how to play" walkthrough — shown once (per player) the first
+// time the sub emerges in an arena. Advanced step-by-step with "Siguiente".
+export const SUB_INTRO: { emoji: string; name: string; desc: string }[] = [
+  {
+    emoji: '🕹️',
+    name: 'Tu submarino',
+    desc: 'Piloteas este submarino. Muévete con las flechas: ← → giran el timón y ↑ ↓ avanzan o dan reversa.',
+  },
+  {
+    emoji: '🌊',
+    name: 'Sumérgete y descubre',
+    desc: 'Pulsa Espacio para sumergirte o emerger. Cada vez cubres el mosaico bajo el submarino y vas destapando la imagen de la ciudad.',
+  },
+  {
+    emoji: '🎯',
+    name: 'Tu misión',
+    desc: 'Cubre suficientes mosaicos para completar la misión, esquivando a los enemigos. Recoge orbes 💙 para recuperar energía y power-ups para liberar mosaicos de golpe.',
+  },
+];
+
 export type EnemyType = 'warship' | 'submarineIx' | 'cargo' | 'bomber' | 'shark' | 'minelayer';
 
 // A machine-gun tracer round (pooled; physics driven by Scene, drawn by
@@ -554,10 +574,16 @@ export const game = $state({
   // explained the first time the player TOUCHES one. Known ones don't re-explain.
   introducedEnemies: [] as EnemyType[],
   introducedBonuses: [] as BonusType[],
-  // While non-null, the game is paused showing an explanation card near (sx,sy)
-  // for a new enemy (kind:'enemy') or a just-touched new bonus (kind:'bonus');
-  // it waits for "Continuar". `key` is the EnemyType or BonusType.
-  introCard: null as { kind: 'enemy' | 'bonus'; key: string; sx: number; sy: number } | null,
+  // Whether the multi-step submarine "how to play" tutorial has been shown ever
+  // (persisted). Runs the first time the sub emerges in an arena entrance.
+  introducedSub: false,
+  // While non-null, the game is paused showing an explanation card near (sx,sy):
+  // a new enemy (kind:'enemy'), a just-touched new bonus (kind:'bonus'), or the
+  // submarine how-to-play walkthrough (kind:'sub', multiple `step`s). `key` is
+  // the EnemyType/BonusType, or 'sub'. It waits for the player to advance/close.
+  introCard: null as
+    | { kind: 'enemy' | 'bonus' | 'sub'; key: string; sx: number; sy: number; step: number }
+    | null,
 });
 
 // Restore the per-player name saved on a previous visit.
@@ -618,11 +644,25 @@ if (typeof localStorage !== 'undefined') {
   } catch {
     /* ignore corrupt value */
   }
+  if (localStorage.getItem('buzito.introducedSub') === 'true') game.introducedSub = true;
 }
 
-// Dismiss the explanation card ("Continuar"): remember the enemy/bonus type as
-// introduced (never explained again) and resume. For a bonus, Scene applies the
-// deferred effect once it sees the card cleared.
+// Advance the explanation card. The submarine walkthrough steps through
+// SUB_INTRO with "Siguiente"; the last step (and single-step enemy/bonus
+// cards) close via dismissIntroCard.
+export function nextIntroCard() {
+  const card = game.introCard;
+  if (!card) return;
+  if (card.kind === 'sub' && card.step < SUB_INTRO.length - 1) {
+    card.step += 1;
+    return;
+  }
+  dismissIntroCard();
+}
+
+// Dismiss the explanation card: remember the enemy/bonus type (or the sub
+// walkthrough) as introduced (never explained again) and resume. For a bonus,
+// Scene applies the deferred effect once it sees the card cleared.
 export function dismissIntroCard() {
   const card = game.introCard;
   if (!card) return;
@@ -633,12 +673,18 @@ export function dismissIntroCard() {
         localStorage.setItem('buzito.introducedEnemies', JSON.stringify(game.introducedEnemies));
       }
     }
-  } else {
+  } else if (card.kind === 'bonus') {
     if (!game.introducedBonuses.includes(card.key as BonusType)) {
       game.introducedBonuses.push(card.key as BonusType);
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('buzito.introducedBonuses', JSON.stringify(game.introducedBonuses));
       }
+    }
+  } else {
+    // sub walkthrough
+    game.introducedSub = true;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('buzito.introducedSub', 'true');
     }
   }
   game.introCard = null;

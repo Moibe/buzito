@@ -218,10 +218,19 @@
         const m = movers[e.id];
         if (m) highlightPos = { x: m.x, z: m.z };
         const { sx, sy } = cardAnchor(m ? m.x : 0, m ? m.z : 0);
-        game.introCard = { kind: 'enemy', key: e.type, sx, sy };
+        game.introCard = { kind: 'enemy', key: e.type, sx, sy, step: 0 };
         return;
       }
     }
+  }
+
+  // Once (per player), pause when the submarine has emerged to walk the player
+  // through how to play (multi-step card). Fires before any enemy emerges.
+  function maybePresentSub() {
+    if (game.introducedSub || introElapsed < APPEAR_DUR) return;
+    highlightPos = { x: game.x, z: game.z };
+    const { sx, sy } = cardAnchor(game.x, game.z);
+    game.introCard = { kind: 'sub', key: 'sub', sx, sy, step: 0 };
   }
 
   // Apply a bonus's actual effect (heal / liberate). Deferred to Continue on the
@@ -255,7 +264,7 @@
     pendingBonus = { type, x, z, angle };
     highlightPos = { x, z };
     const { sx, sy } = cardAnchor(x, z);
-    game.introCard = { kind: 'bonus', key: type, sx, sy };
+    game.introCard = { kind: 'bonus', key: type, sx, sy, step: 0 };
     return true;
   }
 
@@ -493,7 +502,8 @@
     }
     if (!introPaused && introElapsed < INTRO_END) {
       introElapsed += delta;
-      maybePresentEnemy();
+      maybePresentSub();
+      if (game.introCard === null) maybePresentEnemy();
     }
     // A sunk sub doesn't answer the helm; nor does it during the entrance
     // cinematic or while an explanation card is up — controls freeze.

@@ -17,11 +17,12 @@
     startNewCampaign,
     ARENAS_PER_CITY,
     SUB_DETAILS,
+    SUB_INTRO,
     setSubColor,
     setSubDetailColor,
     setSubDetail,
     setPlayerName,
-    dismissIntroCard,
+    nextIntroCard,
   } from '$lib/game.svelte';
   import SubPreview from '$lib/SubPreview.svelte';
   import IntroScene from '$lib/IntroScene.svelte';
@@ -337,20 +338,37 @@
   </div>
 {/if}
 
-<!-- Explanation card — a NEW ENEMY (first seen, during the entrance) or a NEW
-     BONUS (first touched); anchored next to the highlighted actor. -->
+<!-- Explanation card — a NEW ENEMY (first seen), a NEW BONUS (first touched), or
+     the submarine how-to-play walkthrough (multi-step); anchored to the actor. -->
 {#if game.introCard}
   {@const card = game.introCard}
   {@const info =
-    card.kind === 'enemy' ? ENEMY_INFO[card.key as EnemyType] : BONUS_INFO[card.key as BonusType]}
+    card.kind === 'enemy'
+      ? ENEMY_INFO[card.key as EnemyType]
+      : card.kind === 'bonus'
+        ? BONUS_INFO[card.key as BonusType]
+        : SUB_INTRO[card.step]}
+  {@const isSub = card.kind === 'sub'}
+  {@const lastStep = isSub && card.step >= SUB_INTRO.length - 1}
   <div class="enemy-intro" style="left: {card.sx}px; top: {card.sy}px;">
-    <span class="ei-tag">{card.kind === 'enemy' ? '¡Nuevo enemigo!' : '¡Nuevo poder!'}</span>
+    <span class="ei-tag">
+      {card.kind === 'enemy' ? '¡Nuevo enemigo!' : card.kind === 'bonus' ? '¡Nuevo poder!' : '¿Cómo jugar?'}
+    </span>
     <div class="ei-head">
       <span class="ei-emoji">{info.emoji}</span>
       <strong>{info.name}</strong>
     </div>
     <p class="ei-desc">{info.desc}</p>
-    <button class="ei-go" onclick={dismissIntroCard}>Continuar →</button>
+    {#if isSub}
+      <div class="ei-dots" aria-hidden="true">
+        {#each SUB_INTRO as _, i}
+          <span class="ei-dot" class:on={i === card.step}></span>
+        {/each}
+      </div>
+    {/if}
+    <button class="ei-go" onclick={nextIntroCard}>
+      {isSub && !lastStep ? 'Siguiente →' : isSub ? '¡A jugar! →' : 'Continuar →'}
+    </button>
   </div>
 {/if}
 
@@ -1315,6 +1333,23 @@
     margin: 0;
     color: rgba(255, 255, 255, 0.85);
     font: 500 13.5px/1.5 system-ui, sans-serif;
+  }
+  /* Step dots for the multi-step submarine walkthrough. */
+  .ei-dots {
+    display: flex;
+    gap: 6px;
+    align-self: center;
+    margin: 2px 0;
+  }
+  .ei-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    transition: background 0.15s;
+  }
+  .ei-dot.on {
+    background: #ffd700;
   }
   .ei-go {
     align-self: flex-end;
