@@ -203,7 +203,10 @@
         </span>
       </p>
     {/if}
-    <button class="sub-back" onclick={goToSubScreen}>◄ Submarino</button>
+    <div class="ls-nav-row">
+      <button class="sub-back" onclick={goToProfile}>◄ Perfil</button>
+      <button class="sub-back" onclick={goToSubScreen}>◄ Submarino</button>
+    </div>
     <div class="ls-grid">
       {#each game.missions as city}
         {@const done = game.completed.includes(city)}
@@ -828,6 +831,15 @@
   .sub-back:hover {
     background: rgba(20, 45, 68, 0.85);
     color: #fff;
+  }
+  /* Row of back-nav buttons (city picker: ◄ Perfil + ◄ Submarino side by side). */
+  .ls-nav-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .ls-nav-row .sub-back {
+    margin-bottom: 0;
   }
   .ls-title {
     margin: 0;
