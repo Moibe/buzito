@@ -398,8 +398,8 @@ function makeEnemiesForMission(n: number, power: number): Enemy[] {
 }
 
 export const game = $state({
-  // Which screen is showing: sub customization → mission picker → arena.
-  screen: 'sub' as 'sub' | 'select' | 'play',
+  // Which screen: intro → sub customization → mission picker → arena.
+  screen: 'intro' as 'intro' | 'sub' | 'select' | 'play',
   // Currently selected mission slot (1-8). Cosmetic for now — all lead to arena.
   level: 1,
   // The 8 campaign cities: random from the world's 100 largest. The player

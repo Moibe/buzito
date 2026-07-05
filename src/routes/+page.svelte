@@ -21,6 +21,7 @@
     setSubDetail,
   } from '$lib/game.svelte';
   import SubPreview from '$lib/SubPreview.svelte';
+  import IntroScene from '$lib/IntroScene.svelte';
   import { MISSIONS } from '$lib/missions';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
 
@@ -59,7 +60,23 @@
   }
 </script>
 
-{#if game.screen === 'sub'}
+{#if game.screen === 'intro'}
+  <!-- Cinematic intro: title, hero submarine, and Start. -->
+  <div class="intro">
+    <div class="intro-hero">
+      <Canvas>
+        <IntroScene color={config.sub.color} detailColor={config.sub.detailColor} detail={config.sub.detail} />
+      </Canvas>
+    </div>
+    <div class="intro-overlay">
+      <div class="intro-head">
+        <h1 class="intro-title">buzito</h1>
+        <p class="intro-tag">Sumérgete · Descubre · Conquista</p>
+      </div>
+      <button class="intro-start" onclick={() => (game.screen = 'sub')}>Iniciar Juego</button>
+    </div>
+  </div>
+{:else if game.screen === 'sub'}
   <!-- Submarine choice & customization, shown before the city picker. -->
   <div class="subscreen">
     <h1 class="ls-title">buzito</h1>
@@ -473,6 +490,83 @@
     justify-content: center;
     gap: 4px;
     text-align: center;
+  }
+
+  /* --- Intro screen --- */
+  .intro {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    overflow: hidden;
+  }
+  .intro-hero {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  .intro-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6vh 16px 8vh;
+    box-sizing: border-box;
+    pointer-events: none;
+    text-align: center;
+  }
+  .intro-head {
+    animation: introfloat 5s ease-in-out infinite;
+  }
+  .intro-title {
+    margin: 0;
+    color: #ffd700;
+    font: 800 clamp(52px, 12vw, 128px) / 1 system-ui, sans-serif;
+    letter-spacing: 0.08em;
+    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.35);
+    animation: introglow 3.5s ease-in-out infinite;
+  }
+  .intro-tag {
+    margin: 8px 0 0;
+    color: rgba(255, 255, 255, 0.85);
+    font: 600 clamp(13px, 2.2vw, 18px) / 1 system-ui, sans-serif;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+  .intro-start {
+    pointer-events: auto;
+    background: linear-gradient(135deg, #ffd700, #ffb300);
+    color: #10233f;
+    border: none;
+    border-radius: 14px;
+    padding: 16px 44px;
+    font: 800 20px/1 system-ui, sans-serif;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 34px rgba(255, 215, 0, 0.45);
+    animation: introbtn 2s ease-in-out infinite;
+    transition: transform 0.12s;
+  }
+  .intro-start:hover {
+    transform: translateY(-2px) scale(1.03);
+  }
+  .intro-start:active {
+    transform: translateY(0) scale(0.99);
+  }
+  @keyframes introfloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes introglow {
+    0%, 100% { text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 215, 0, 0.3); }
+    50% { text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5), 0 0 52px rgba(255, 215, 0, 0.6); }
+  }
+  @keyframes introbtn {
+    0%, 100% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 26px rgba(255, 215, 0, 0.4); }
+    50% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 46px rgba(255, 215, 0, 0.75); }
   }
 
   /* --- Submarine customization screen --- */
