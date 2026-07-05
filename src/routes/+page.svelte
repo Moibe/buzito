@@ -86,9 +86,35 @@
   const missionPct = $derived(
     game.totalTiles > 0 ? Math.min(100, (game.visitedCount / game.totalTiles) * 100) : 0
   );
-  // Integer % shown in the HUD; the display re-mounts (via {#key}) whenever this
-  // changes, replaying the dramatic pop animation.
+  // True integer % target.
   const missionPctInt = $derived(Math.round(missionPct));
+  // The % actually SHOWN — it climbs to the target ONE POINT AT A TIME so a jump
+  // (wide mode / power-ups / win fill) counts up 29,30,31… each with its own pop.
+  // Decreases (arena reset → 0) snap instantly. pctCursor is a plain mirror so
+  // the effect doesn't depend on displayedPct (only on the target).
+  let displayedPct = $state(0);
+  let pctCursor = 0;
+  $effect(() => {
+    const target = missionPctInt;
+    if (target <= pctCursor) {
+      pctCursor = target;
+      displayedPct = target;
+      return;
+    }
+    const advance = () => {
+      pctCursor += 1;
+      displayedPct = pctCursor;
+    };
+    advance(); // first step immediately (responsive on a single +1)
+    if (pctCursor >= target) return;
+    // Pace: ~130ms per step, but speed up big jumps so the whole climb is ≤ ~1.6s.
+    const step = Math.max(45, Math.min(130, 1600 / (target - pctCursor)));
+    const id = setInterval(() => {
+      advance();
+      if (pctCursor >= target) clearInterval(id);
+    }, step);
+    return () => clearInterval(id);
+  });
 
   // The enemy whose context menu is open (null = no menu).
   const selectedEnemy = $derived(
@@ -270,8 +296,8 @@
 
 <div class="hud">
   <div class="progress">
-    {#key missionPctInt}
-      <span class="progress-pct">{missionPctInt}%</span>
+    {#key displayedPct}
+      <span class="progress-pct">{displayedPct}%</span>
     {/key}
     <span class="progress-count">{game.visitedCount} / {game.totalTiles}</span>
   </div>
