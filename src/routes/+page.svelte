@@ -34,7 +34,7 @@
   import type { BonusType } from '$lib/missions';
   import type { EnemyType } from '$lib/game.svelte';
   import { cityFlagCode, cityCountry } from '$lib/cityFlags';
-  import { musicState, initMusic, setMusicForScreen, toggleMute } from '$lib/music.svelte';
+  import { musicState, initMusic, setMusicForScreen, toggleMute, cycleTrack } from '$lib/music.svelte';
 
   // Music: start on first gesture (autoplay policy), then pick calm/lively by screen.
   onMount(initMusic);
@@ -528,15 +528,21 @@
   </div>
 {/if}
 
-<!-- Global music mute toggle (all screens). -->
-<button
-  class="mute-btn"
-  onclick={toggleMute}
-  title={musicState.muted ? 'Activar música' : 'Silenciar música'}
-  aria-label={musicState.muted ? 'Activar música' : 'Silenciar música'}
->
-  {musicState.muted ? '🔇' : '🔊'}
-</button>
+<!-- Global music controls (all screens): change track + mute. -->
+<div class="music-ctl">
+  <button class="track-btn" onclick={cycleTrack} title="Cambiar música">
+    <span class="track-note" aria-hidden="true">♫</span>
+    <span class="track-name">{musicState.trackName}</span>
+  </button>
+  <button
+    class="mute-btn"
+    onclick={toggleMute}
+    title={musicState.muted ? 'Activar música' : 'Silenciar música'}
+    aria-label={musicState.muted ? 'Activar música' : 'Silenciar música'}
+  >
+    {musicState.muted ? '🔇' : '🔊'}
+  </button>
+</div>
 
 <style>
   :global(html, body) {
@@ -557,31 +563,58 @@
     position: fixed;
     inset: 0;
   }
-  /* Global music mute toggle — bottom-right, above every overlay. */
-  .mute-btn {
+  /* Global music controls — bottom-right, above every overlay. */
+  .music-ctl {
     position: fixed;
     bottom: 16px;
     right: 16px;
     z-index: 40;
-    width: 38px;
-    height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .track-btn,
+  .mute-btn {
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(10, 20, 30, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 50%;
-    font-size: 17px;
-    line-height: 1;
+    color: rgba(255, 255, 255, 0.9);
     cursor: pointer;
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     transition: background 0.15s, border-color 0.15s, transform 0.1s;
   }
+  .track-btn:hover,
   .mute-btn:hover {
     background: rgba(20, 45, 68, 0.85);
     border-color: rgba(255, 255, 255, 0.5);
     transform: translateY(-1px);
+  }
+  .track-btn {
+    gap: 6px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font: 700 12px/1 system-ui, sans-serif;
+  }
+  .track-note {
+    color: #ffd700;
+    font-size: 14px;
+  }
+  .track-name {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mute-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    font-size: 17px;
+    line-height: 1;
   }
   .hud {
     position: fixed;
