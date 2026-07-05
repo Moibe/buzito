@@ -14,6 +14,7 @@
     adjustMissionBonus,
     setHeal,
     setRespawn,
+    saveConfig,
     adminSync,
   } from '$lib/game.svelte';
 
@@ -33,12 +34,12 @@
   let collapsed = $state(false);
   // Initial section can be set via ?sec= (e.g. returning from a city page).
   const secParam = page.url.searchParams.get('sec');
-  const initialSection = (['ajustes', 'ciudades', 'misiones'] as const).includes(
-    secParam as 'ajustes' | 'ciudades' | 'misiones'
+  const initialSection = (['ajustes', 'ciudades', 'misiones', 'config'] as const).includes(
+    secParam as 'ajustes' | 'ciudades' | 'misiones' | 'config'
   )
-    ? (secParam as 'ajustes' | 'ciudades' | 'misiones')
+    ? (secParam as 'ajustes' | 'ciudades' | 'misiones' | 'config')
     : 'ajustes';
-  let section = $state<'ajustes' | 'ciudades' | 'misiones'>(initialSection);
+  let section = $state<'ajustes' | 'ciudades' | 'misiones' | 'config'>(initialSection);
   // Which mission card the dragged enemy is hovering (for the drop highlight).
   let dragOverIndex = $state(-1);
 
@@ -303,6 +304,131 @@
               </div>
             </article>
           {/each}
+        </div>
+      {:else if section === 'config'}
+        <header class="work-head">
+          <h2>Config</h2>
+          <p>
+            Parámetros crudos del juego: submarino, habilidades y enemigos. Se guardan en el
+            servidor y aplican a todas las partidas.
+            {#if adminSync.status !== 'idle'}
+              <span class="save-status {adminSync.status}">{saveText[adminSync.status]}</span>
+            {/if}
+          </p>
+        </header>
+
+        <!-- A numeric knob that NEVER writes a null/NaN into config (a cleared
+             field keeps the last value; re-synced on blur). Live-updates config
+             on input; the wrapper's change handler persists to the server. -->
+        {#snippet num(
+          obj: Record<string, number | boolean | string>,
+          key: string,
+          label: string,
+          step: number,
+          min: number,
+          max?: number
+        )}
+          <label class="cfg-knob">
+            <span>{label}</span>
+            <input
+              type="number"
+              {step}
+              {min}
+              {max}
+              value={obj[key] as number}
+              oninput={(e) => {
+                const v = e.currentTarget.valueAsNumber;
+                if (Number.isFinite(v)) obj[key] = v;
+              }}
+              onblur={(e) => (e.currentTarget.value = String(obj[key]))}
+            />
+          </label>
+        {/snippet}
+
+        <!-- Same knobs the old in-game panel had — now admin-only. Each edit
+             bubbles a change event to the wrapper, which persists to the server. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="cfg-groups" onchange={saveConfig}>
+          <section class="cfg-card">
+            <h3>🔱 Submarino (jugador)</h3>
+            {@render num(config.sub, 'hp', 'Casco', 5, 1)}
+            {@render num(config.sub, 'speed', 'Velocidad', 0.1, 0)}
+            {@render num(config.sub, 'turnRate', 'Giro', 0.1, 0)}
+          </section>
+
+          <section class="cfg-card">
+            <h3>🎯 Misiles · tecla M</h3>
+            <label class="cfg-knob cfg-toggle"><span>Activar</span><input type="checkbox" bind:checked={config.player.missiles.enabled} /></label>
+            {@render num(config.player.missiles, 'damage', 'Daño', 1, 0)}
+            {@render num(config.player.missiles, 'speed', 'Velocidad', 0.5, 1)}
+            {@render num(config.player.missiles, 'interval', 'Cadencia (s)', 0.1, 0.1)}
+          </section>
+
+          <section class="cfg-card">
+            <h3>⚡ Mayor velocidad</h3>
+            <label class="cfg-knob cfg-toggle"><span>Activar</span><input type="checkbox" bind:checked={config.player.speedBoost.enabled} /></label>
+            {@render num(config.player.speedBoost, 'mult', 'Multiplicador', 0.1, 1)}
+          </section>
+
+          <section class="cfg-card">
+            <h3>🚢 Destructor</h3>
+            {@render num(config.enemies.warship, 'hp', 'Casco', 5, 1)}
+            {@render num(config.enemies.warship, 'ram', 'Embestida', 1, 0)}
+            {@render num(config.enemies.warship, 'speed', 'Velocidad', 0.1, 0)}
+            {@render num(config.enemies.warship, 'fireInterval', 'Cadencia (s)', 0.01, 0.01)}
+            {@render num(config.enemies.warship, 'tracerDamage', 'Daño bala', 1, 0)}
+            {@render num(config.enemies.warship, 'range', 'Alcance (tiles)', 0.5, 0)}
+          </section>
+
+          <section class="cfg-card">
+            <h3>📦 Carguero</h3>
+            {@render num(config.enemies.cargo, 'hp', 'Casco', 5, 1)}
+            {@render num(config.enemies.cargo, 'ram', 'Embestida', 1, 0)}
+            {@render num(config.enemies.cargo, 'speed', 'Velocidad', 0.1, 0)}
+          </section>
+
+          <section class="cfg-card">
+            <h3>🛥️ U-Boat</h3>
+            {@render num(config.enemies.submarineIx, 'hp', 'Casco', 5, 1)}
+            {@render num(config.enemies.submarineIx, 'ram', 'Embestida', 1, 0)}
+            {@render num(config.enemies.submarineIx, 'speed', 'Velocidad', 0.1, 0)}
+            {@render num(config.enemies.submarineIx, 'depthMin', 'Prof. mín (s)', 0.5, 0.5)}
+            {@render num(config.enemies.submarineIx, 'depthMax', 'Prof. máx (s)', 0.5, 0.5)}
+          </section>
+
+          <section class="cfg-card">
+            <h3>✈️ Bombardero</h3>
+            {@render num(config.enemies.bomber, 'hp', 'Casco', 5, 1)}
+            {@render num(config.enemies.bomber, 'ram', 'Embestida', 1, 0)}
+            {@render num(config.enemies.bomber, 'speed', 'Velocidad', 0.1, 0)}
+            {@render num(config.enemies.bomber, 'salvoMin', 'Salva mín (s)', 0.5, 0.5)}
+            {@render num(config.enemies.bomber, 'salvoMax', 'Salva máx (s)', 0.5, 0.5)}
+            {@render num(config.enemies.bomber, 'salvoSize', 'Nº bombas', 1, 1)}
+            {@render num(config.enemies.bomber, 'bombDamage', 'Daño bomba', 1, 0)}
+            {@render num(config.enemies.bomber, 'blastRadius', 'Radio explosión', 0.2, 0.2)}
+          </section>
+
+          <section class="cfg-card">
+            <h3>🦈 Tiburón</h3>
+            {@render num(config.enemies.shark, 'hp', 'Casco', 5, 1)}
+            {@render num(config.enemies.shark, 'ram', 'Embestida', 1, 0)}
+            {@render num(config.enemies.shark, 'speed', 'Velocidad', 0.1, 0)}
+            {@render num(config.enemies.shark, 'depthMin', 'Prof. mín (s)', 0.5, 0.5)}
+            {@render num(config.enemies.shark, 'depthMax', 'Prof. máx (s)', 0.5, 0.5)}
+            {@render num(config.enemies.shark, 'torpedoInterval', 'Torpedo cada (s)', 0.5, 0.3)}
+            {@render num(config.enemies.shark, 'torpedoDamage', 'Daño torpedo', 1, 0)}
+            {@render num(config.enemies.shark, 'torpedoSpeed', 'Vel. torpedo', 0.5, 1)}
+          </section>
+
+          <section class="cfg-card">
+            <h3>⚓ Minador</h3>
+            {@render num(config.enemies.minelayer, 'hp', 'Casco', 5, 1)}
+            {@render num(config.enemies.minelayer, 'ram', 'Embestida', 1, 0)}
+            {@render num(config.enemies.minelayer, 'speed', 'Velocidad', 0.1, 0)}
+            {@render num(config.enemies.minelayer, 'dropInterval', 'Mina cada (s)', 0.5, 0.3)}
+            {@render num(config.enemies.minelayer, 'mineDamage', 'Daño mina', 1, 0)}
+            {@render num(config.enemies.minelayer, 'maxMines', 'Máx. minas', 1, 1, 16)}
+          </section>
         </div>
       {/if}
     </div>
@@ -871,5 +997,57 @@
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.35);
     color: #fff;
+  }
+
+  /* --- Config (raw game knobs) --- */
+  .cfg-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+  .cfg-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .cfg-card h3 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.01em;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.14);
+  }
+  .cfg-knob {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.82);
+  }
+  .cfg-knob input[type='number'] {
+    width: 74px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 7px;
+    padding: 6px 8px;
+    color: #fff;
+    font: 700 13px/1 system-ui, sans-serif;
+    text-align: right;
+  }
+  .cfg-knob input[type='number']:focus {
+    outline: none;
+    border-color: #ffd700;
+  }
+  .cfg-toggle input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: #ffd700;
+    cursor: pointer;
   }
 </style>

@@ -173,6 +173,25 @@ function isValidRespawn(v: unknown): v is Record<BonusType, number> {
   return true;
 }
 
+// Deep-merge a server-provided tuning tree onto a live config object, copying a
+// leaf ONLY when the target already has a same-typed leaf at that path (so
+// unknown/stale keys are ignored and untouched fields keep their client default;
+// string fields like the per-player appearance are skipped entirely).
+function mergeNumericTree(target: Record<string, unknown>, src: unknown) {
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return;
+  const s = src as Record<string, unknown>;
+  for (const k of Object.keys(target)) {
+    if (!(k in s)) continue;
+    const tv = target[k];
+    const sv = s[k];
+    if (typeof tv === 'number' && typeof sv === 'number' && Number.isFinite(sv)) target[k] = sv;
+    else if (typeof tv === 'boolean' && typeof sv === 'boolean') target[k] = sv;
+    else if (tv && typeof tv === 'object' && sv && typeof sv === 'object') {
+      mergeNumericTree(tv as Record<string, unknown>, sv);
+    }
+  }
+}
+
 // Apply settings coming from the SERVER (the source of truth, loaded via the
 // root layout). Validated before use.
 export function applyServerSettings(
@@ -183,6 +202,9 @@ export function applyServerSettings(
         respawn?: unknown;
         missionEnemies?: unknown;
         missionBonuses?: unknown;
+        sub?: unknown;
+        player?: unknown;
+        enemies?: unknown;
       }
     | null
     | undefined
@@ -193,6 +215,11 @@ export function applyServerSettings(
   if (isValidRespawn(s.respawn)) config.rules.respawn = s.respawn;
   if (isValidMissionEnemies(s.missionEnemies)) config.missionEnemies = s.missionEnemies;
   if (isValidMissionBonuses(s.missionBonuses)) config.missionBonuses = s.missionBonuses;
+  // Raw tuning knobs (admin-only, persisted server-side). Merged leaf-by-leaf
+  // so the per-player appearance (config.sub.color/…) is never overwritten.
+  mergeNumericTree(config.sub, s.sub);
+  mergeNumericTree(config.player, s.player);
+  mergeNumericTree(config.enemies, s.enemies);
 }
 
 // Save status the admin UI can show, so a failed write (e.g. expired session →
@@ -201,28 +228,47 @@ export const adminSync = $state<{ status: 'idle' | 'saving' | 'saved' | 'error' 
   status: 'idle',
 });
 
-// Persist the current admin-editable settings to the SERVER. Only the admin
-// calls the mutators below; the write endpoint is gated by the admin cookie.
-// No-op during SSR.
-async function saveSettingsToServer() {
+// PUT a partial settings payload to the SERVER (admin-only; the endpoint is
+// gated by the admin cookie, which merges it onto the stored settings). No-op
+// during SSR. Kept partial so a rules save never rewrites the config knobs and
+// vice-versa — otherwise a rules save would freeze the current config defaults
+// server-side and mask later code-default changes.
+async function putSettings(payload: Record<string, unknown>) {
   if (typeof window === 'undefined') return;
   adminSync.status = 'saving';
   try {
     const res = await fetch('/api/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        winPct: config.rules.winPct,
-        heal: config.rules.heal,
-        respawn: config.rules.respawn,
-        missionEnemies: config.missionEnemies,
-        missionBonuses: config.missionBonuses,
-      }),
+      body: JSON.stringify(payload),
     });
     adminSync.status = res.ok ? 'saved' : 'error';
   } catch {
     adminSync.status = 'error';
   }
+}
+
+// Persist the game RULES (the mutators below call this). Only the admin edits
+// them; the write endpoint is gated by the admin cookie.
+function saveSettingsToServer() {
+  putSettings({
+    winPct: config.rules.winPct,
+    heal: config.rules.heal,
+    respawn: config.rules.respawn,
+    missionEnemies: config.missionEnemies,
+    missionBonuses: config.missionBonuses,
+  });
+}
+
+// Persist the raw config knobs (called by the admin's Config panel after an
+// edit). Sends only the config tree — the appearance (color/detailColor/detail)
+// is per-player and stays in localStorage, so it's stripped from `sub` here.
+export function saveConfig() {
+  putSettings({
+    sub: { hp: config.sub.hp, speed: config.sub.speed, turnRate: config.sub.turnRate },
+    player: config.player,
+    enemies: config.enemies,
+  });
 }
 
 // Set the win-coverage rule from a PERCENTAGE (0-100), clamp, and persist it to
@@ -614,7 +660,9 @@ export function goToIntro() {
 // Restart after sinking: fresh hull, back to the arena center, progress
 // cleared. Enemies keep their state (position/active) — the threat remains.
 export function resetGame() {
-  game.hp = config.sub.hp;
+  // Guard a cleared/invalid sub HP (same floor as healSub / the HUD) so a blank
+  // admin "Casco" field can't spawn the sub at null HP → instant game over.
+  game.hp = config.sub.hp > 0 ? config.sub.hp : 1;
   game.gameOver = false;
   game.deathCause = '';
   game.won = false;
