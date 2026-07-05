@@ -221,6 +221,8 @@
                 <span class="total">{m.total} en total</span>
               </div>
 
+              <p class="mnote">{m.note}</p>
+
               <!-- Bonuses (power-ups) per mission, with +/- steppers. -->
               <div class="bonuses">
                 <span class="bonuses-label">Bonos</span>
@@ -244,8 +246,6 @@
                   </div>
                 {/each}
               </div>
-
-              <p class="mnote">{m.note}</p>
             </article>
           {/each}
         </div>
