@@ -18,6 +18,9 @@
     saveConfig,
     adminSync,
   } from '$lib/game.svelte';
+  import { musicState, trackCatalog, previewTrack, stopPreview } from '$lib/music.svelte';
+  import { onDestroy } from 'svelte';
+  onDestroy(stopPreview); // stop any preview if we leave the admin
 
   // Typed [type, info] list of bonuses for the per-mission steppers.
   const BONUS_LIST = Object.entries(BONUS_INFO) as [BonusType, { name: string; emoji: string }][];
@@ -35,12 +38,17 @@
   let collapsed = $state(false);
   // Initial section can be set via ?sec= (e.g. returning from a city page).
   const secParam = page.url.searchParams.get('sec');
-  const initialSection = (['ajustes', 'ciudades', 'misiones', 'config'] as const).includes(
-    secParam as 'ajustes' | 'ciudades' | 'misiones' | 'config'
+  type Section = 'ajustes' | 'ciudades' | 'misiones' | 'config' | 'soundtrack';
+  const initialSection = (['ajustes', 'ciudades', 'misiones', 'config', 'soundtrack'] as const).includes(
+    secParam as Section
   )
-    ? (secParam as 'ajustes' | 'ciudades' | 'misiones' | 'config')
+    ? (secParam as Section)
     : 'ajustes';
-  let section = $state<'ajustes' | 'ciudades' | 'misiones' | 'config'>(initialSection);
+  let section = $state<Section>(initialSection);
+  // Stop any Soundtrack preview when leaving that section.
+  $effect(() => {
+    if (section !== 'soundtrack' && musicState.preview) stopPreview();
+  });
   // Which mission card the dragged enemy is hovering (for the drop highlight).
   let dragOverIndex = $state(-1);
 
@@ -444,6 +452,58 @@
             {@render num(config.enemies.minelayer, 'dropInterval', 'Mina cada (s)', 0.5, 0.3)}
             {@render num(config.enemies.minelayer, 'mineDamage', 'Daño mina', 1, 0)}
             {@render num(config.enemies.minelayer, 'maxMines', 'Máx. minas', 1, 1, 16)}
+          </section>
+        </div>
+      {:else if section === 'soundtrack'}
+        <header class="work-head">
+          <h2>Soundtrack</h2>
+          <p>
+            Música chiptune 8-bit generada en el juego (sin archivos). Escucha cada pista aquí.
+            El jugador cambia de pista con el botón ♫ dentro del juego.
+          </p>
+        </header>
+
+        <div class="st-groups">
+          <section class="st-card">
+            <h3>🎛️ Preparación (menús)</h3>
+            <ul class="st-list">
+              {#each trackCatalog.menu as t}
+                {@const key = `menu:${t.index}`}
+                {@const playing = musicState.preview === key}
+                <li>
+                  <button
+                    class="st-play"
+                    class:playing
+                    onclick={() => (playing ? stopPreview() : previewTrack('menu', t.index))}
+                  >
+                    {playing ? '⏹' : '▶'}
+                  </button>
+                  <span class="st-name">{t.name}</span>
+                  {#if t.index === 0}<span class="st-tag">original</span>{/if}
+                </li>
+              {/each}
+            </ul>
+          </section>
+
+          <section class="st-card">
+            <h3>⚔️ Batalla (arena)</h3>
+            <ul class="st-list">
+              {#each trackCatalog.arena as t}
+                {@const key = `arena:${t.index}`}
+                {@const playing = musicState.preview === key}
+                <li>
+                  <button
+                    class="st-play"
+                    class:playing
+                    onclick={() => (playing ? stopPreview() : previewTrack('arena', t.index))}
+                  >
+                    {playing ? '⏹' : '▶'}
+                  </button>
+                  <span class="st-name">{t.name}</span>
+                  {#if t.index === 0}<span class="st-tag">original</span>{/if}
+                </li>
+              {/each}
+            </ul>
           </section>
         </div>
       {/if}
@@ -1073,5 +1133,79 @@
     height: 16px;
     accent-color: #ffd700;
     cursor: pointer;
+  }
+
+  /* --- Soundtrack --- */
+  .st-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  .st-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .st-card h3 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.14);
+  }
+  .st-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .st-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .st-play {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 215, 0, 0.14);
+    color: #ffd700;
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    border-radius: 50%;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .st-play:hover {
+    background: rgba(255, 215, 0, 0.26);
+    border-color: rgba(255, 215, 0, 0.9);
+  }
+  .st-play.playing {
+    background: rgba(74, 222, 128, 0.22);
+    border-color: rgba(74, 222, 128, 0.8);
+    color: #86efac;
+  }
+  .st-name {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .st-tag {
+    margin-left: auto;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: rgba(255, 215, 0, 0.7);
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    border-radius: 999px;
+    padding: 2px 8px;
   }
 </style>

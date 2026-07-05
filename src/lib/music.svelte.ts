@@ -3,8 +3,14 @@
 // livelier, drum-driven one for the arena. Autoplay is blocked until the first
 // user gesture, so playback starts then; mute is persisted per-player.
 
-// Reactive UI state (the mute + track buttons bind to this).
-export const musicState = $state({ muted: false, started: false, trackName: '' });
+// Reactive UI state (the mute + track buttons bind to this). `preview` holds the
+// "mode:index" key of the track being auditioned in the admin, or null.
+export const musicState = $state({
+  muted: false,
+  started: false,
+  trackName: '',
+  preview: null as string | null,
+});
 if (typeof localStorage !== 'undefined' && localStorage.getItem('buzito.muted') === '1') {
   musicState.muted = true;
 }
@@ -276,18 +282,19 @@ function ensureCtx() {
   noiseBuf = makeNoise(ctx);
 }
 
-// Start playback (call on a user gesture). Idempotent.
+// Start playback (call on a user gesture). Idempotent. Re-syncs the track for
+// the current mode and restores the mute-aware volume (robust after an admin
+// preview left the engine on another track / silenced).
 export function startMusic() {
   if (typeof window === 'undefined') return;
   ensureCtx();
-  if (!ctx) return;
+  if (!ctx || !master) return;
   if (ctx.state === 'suspended') void ctx.resume();
   musicState.started = true;
-  if (!timer) {
-    step = 0;
-    nextTime = ctx.currentTime + 0.05;
-    timer = setInterval(tick, 25);
-  }
+  musicState.preview = null;
+  master.gain.setTargetAtTime(musicState.muted ? 0 : VOLUME, ctx.currentTime, 0.02);
+  applyCurrent();
+  if (!timer) timer = setInterval(tick, 25);
 }
 
 // Wire up: start on the first pointer/key gesture (autoplay policy).
@@ -341,4 +348,38 @@ export function toggleMute() {
   if (ctx && master) {
     master.gain.setTargetAtTime(musicState.muted ? 0 : VOLUME, ctx.currentTime, 0.02);
   }
+}
+
+// --- Admin "Soundtrack" preview ---
+// The track catalogue for the admin UI (names only; index 0 = the original).
+export const trackCatalog = {
+  menu: menuTracks.map((t, i) => ({ index: i, name: t.name })),
+  arena: arenaTracks.map((t, i) => ({ index: i, name: t.name })),
+};
+
+// Audition a specific track on demand (admin). Always audible (ignores mute).
+export function previewTrack(m: 'menu' | 'arena', index: number) {
+  if (typeof window === 'undefined') return;
+  ensureCtx();
+  if (!ctx || !master) return;
+  if (ctx.state === 'suspended') void ctx.resume();
+  const list = m === 'arena' ? arenaTracks : menuTracks;
+  const idx = Math.max(0, Math.min(list.length - 1, index));
+  current = list[idx].track;
+  musicState.trackName = list[idx].name;
+  musicState.preview = `${m}:${idx}`;
+  master.gain.setTargetAtTime(VOLUME, ctx.currentTime, 0.01);
+  step = 0;
+  nextTime = ctx.currentTime + 0.05;
+  if (!timer) timer = setInterval(tick, 25);
+}
+
+// Stop the admin preview.
+export function stopPreview() {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+  if (ctx && master) master.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
+  musicState.preview = null;
 }
