@@ -26,6 +26,7 @@
   import { axialToWorld, worldToAxial, axialRound, buildBoardIsoRect } from './hex';
   import {
     game,
+    flipDelays,
     toggleSubmerged,
     selectEnemy,
     closeEnemyMenu,
@@ -946,49 +947,72 @@
     [1, 0], [-1, 0], // screen diagonal (world x-axis)
     [0, 1], [0, -1], // screen diagonal (world z-axis)
   ];
-  function markTileAt(wx: number, wz: number) {
+  // Optional `delay` (seconds) is handed to Board via flipDelays so a batch of
+  // tiles flips ONE-BY-ONE (staggered) instead of all at once.
+  function markTileAt(wx: number, wz: number, delay = 0) {
     const raw = worldToAxial(wx, wz, TILE_SIZE);
     const a = axialRound(raw.q, raw.r);
     const key = `${a.q},${a.r}`;
     if (boardKeys.has(key) && !game.visited.has(key)) {
       game.visited.add(key);
       game.visitedCount++;
+      if (delay > 0) flipDelays.set(key, delay);
     }
   }
   // Mark a tile by axial (q,r) directly — guarded to REAL cells so visitedCount
   // stays honest (off-board keys are ignored). Used to cover the sub's tile and,
   // in "Modo Amplio", its 6 hex neighbors.
-  function markTileAxial(q: number, r: number) {
+  function markTileAxial(q: number, r: number, delay = 0) {
     const key = `${q},${r}`;
     if (boardKeys.has(key) && !game.visited.has(key)) {
       game.visited.add(key);
       game.visitedCount++;
+      if (delay > 0) flipDelays.set(key, delay);
     }
   }
   // The 6 immediate pointy-top hex neighbors (axial deltas).
   const HEX_NEIGHBORS: [number, number][] = [
     [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1],
   ];
+  // Stagger amounts so batches flip sequentially (see flipDelays).
+  const WIDE_STAGGER = 0.06; // seconds between successive wide-mode neighbors
+  const BONUS_STAGGER = 0.02; // seconds per world-unit from a bonus origin
+  // The 6 neighbors ordered CLOCKWISE on screen (from ~12 o'clock), so Modo
+  // Amplio sweeps "like clock hands". Sorted by each offset's screen angle,
+  // where screen-right = u = (x−z)/√2 and screen-up = −v = −(x+z)/√2 (the iso
+  // camera looks from +x/+z, so points toward −x/−z sit higher on screen).
+  const WIDE_NEIGHBORS_CW: [number, number][] = [...HEX_NEIGHBORS].sort((a, b) => {
+    const wa = axialToWorld(a[0], a[1], TILE_SIZE);
+    const wb = axialToWorld(b[0], b[1], TILE_SIZE);
+    const angA = Math.atan2((wa.x - wa.z) * Math.SQRT1_2, -(wa.x + wa.z) * Math.SQRT1_2);
+    const angB = Math.atan2((wb.x - wb.z) * Math.SQRT1_2, -(wb.x + wb.z) * Math.SQRT1_2);
+    return angA - angB;
+  });
   // Cover the tile under the sub (+ its 6 neighbors when Modo Amplio is on).
   // Goes through the boardKeys-guarded marker: near the arena edge the sub's
   // snapped tile can resolve OFF-board (clamp margin < hex circumradius), and an
   // unguarded mark would inflate visitedCount and win below the set coverage.
+  // In Modo Amplio the neighbors flip one-by-one, clockwise out from the center.
   function coverCurrentTile() {
     const q = game.currentTileQ;
     const r = game.currentTileR;
-    markTileAxial(q, r);
+    markTileAxial(q, r); // center flips first (no delay)
     if (config.rules.wideMode) {
-      for (const [dq, dr] of HEX_NEIGHBORS) markTileAxial(q + dq, r + dr);
+      WIDE_NEIGHBORS_CW.forEach(([dq, dr], k) => {
+        markTileAxial(q + dq, r + dr, (k + 1) * WIDE_STAGGER);
+      });
     }
   }
   // Walk each ray direction (world XZ) from (sx,sz), snapping to the nearest hex
   // each small step, marking every real tile until it leaves the arena — so the
-  // lines are contiguous with no gaps. Also marks the origin tile.
+  // lines are contiguous with no gaps. Also marks the origin tile. Each tile's
+  // flip is delayed by its distance from the origin, so a bonus sweeps outward
+  // from the origin to its extreme(s).
   function liberateRays(sx: number, sz: number, dirs: [number, number][]) {
     const S = Math.SQRT1_2;
     const step = TILE_SIZE * 0.3;
     const reach = (ARENA_HALF_U + ARENA_HALF_V) * 2;
-    markTileAt(sx, sz);
+    markTileAt(sx, sz); // origin flips first
     for (const [dx, dz] of dirs) {
       const len = Math.hypot(dx, dz);
       const nx = dx / len;
@@ -999,7 +1023,7 @@
         const u = (wx - wz) * S;
         const v = (wx + wz) * S;
         if (Math.abs(u) > ARENA_HALF_U || Math.abs(v) > ARENA_HALF_V) break;
-        markTileAt(wx, wz);
+        markTileAt(wx, wz, t * BONUS_STAGGER); // delay grows with distance
       }
     }
   }

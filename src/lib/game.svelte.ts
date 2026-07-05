@@ -582,6 +582,12 @@ export function toggleSubmerged() {
 // (Tile covering lives in Scene.coverCurrentTile, which marks through the
 // boardKeys-guarded marker so an off-board edge tile can't inflate the count.)
 
+// Side-channel from Scene (which knows the origin/order of a batch of covered
+// tiles — wide-mode ring, bonus rays) to Board (which animates the flips):
+// per-tile-key START delay in seconds. Board reads + clears an entry when it
+// begins that tile's flip, so multiple tiles flip one-by-one instead of at once.
+export const flipDelays = new Map<string, number>();
+
 // --- Enemy context-menu actions ---
 export function selectEnemy(id: string) {
   game.selectedEnemyId = id;
@@ -725,6 +731,7 @@ export function resetGame() {
   game.submerged = false;
   game.visited.clear();
   game.visitedCount = 0;
+  flipDelays.clear(); // drop any pending flip stagger from the previous life/arena
   closeEnemyMenu();
 }
 
