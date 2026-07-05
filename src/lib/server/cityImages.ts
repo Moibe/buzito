@@ -1,12 +1,12 @@
 import { readdirSync, existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Server-side store for a city's images: files under data/cities/<n>/, with the
-// listing derived straight from the directory (no manifest to keep in sync).
-// Each city holds up to MAX_IMAGES. Filenames are unique (timestamp+rand), so a
-// given URL is immutable and safe to cache.
+// Server-side store for a city's images, held in FOUR fixed positions (slots
+// 1..4 — order matters). Files live under data/cities/<n>/ named
+// `slot<k>-<timestamp><ext>`: the prefix pins the position, the timestamp keeps
+// each upload's URL unique (so it's immutable-cacheable and a replace busts it).
 const ROOT = join(process.cwd(), 'data', 'cities');
-export const MAX_IMAGES = 4;
+export const SLOTS = 4;
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
 const EXT_TYPE: Record<string, string> = {
@@ -24,38 +24,58 @@ const extOf = (f: string) => {
 };
 // Reject anything that isn't a plain filename (blocks path traversal).
 const isSafeName = (f: string) => /^[A-Za-z0-9._-]+$/.test(f) && !f.includes('..');
+const validSlot = (k: number) => Number.isInteger(k) && k >= 1 && k <= SLOTS;
 
-export function listImages(n: number): string[] {
+// Current filename occupying slot k (or null).
+function slotFile(n: number, k: number): string | null {
   const dir = cityDir(n);
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => extOf(f) in EXT_TYPE)
-    .sort();
+  if (!existsSync(dir)) return null;
+  const pre = `slot${k}-`;
+  const f = readdirSync(dir).find((x) => x.startsWith(pre) && extOf(x) in EXT_TYPE);
+  return f ?? null;
 }
 
-export function addImage(
+// The 4 slots as filenames (index 0 = slot 1), null where empty.
+export function listSlots(n: number): (string | null)[] {
+  return Array.from({ length: SLOTS }, (_, i) => slotFile(n, i + 1));
+}
+
+// Put an image in slot k, replacing whatever was there.
+export function setSlot(
   n: number,
+  k: number,
   originalName: string,
   bytes: Buffer
 ): { ok: true; file: string } | { ok: false; error: string } {
+  if (!validSlot(k)) return { ok: false, error: 'Posición inválida.' };
   const ext = extOf(originalName);
   if (!(ext in EXT_TYPE)) return { ok: false, error: 'Formato no permitido (PNG, JPG, WebP o GIF).' };
   if (bytes.length === 0) return { ok: false, error: 'Archivo vacío.' };
   if (bytes.length > MAX_BYTES) return { ok: false, error: 'Imagen muy grande (máx 5 MB).' };
-  if (listImages(n).length >= MAX_IMAGES) return { ok: false, error: `Máximo ${MAX_IMAGES} imágenes.` };
-  const dir = cityDir(n);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const file = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-  writeFileSync(join(dir, file), bytes);
-  return { ok: true, file };
+  try {
+    const dir = cityDir(n);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const existing = slotFile(n, k);
+    if (existing) rmSync(join(dir, existing));
+    const file = `slot${k}-${Date.now()}${ext}`;
+    writeFileSync(join(dir, file), bytes);
+    return { ok: true, file };
+  } catch {
+    return { ok: false, error: 'No se pudo guardar la imagen en el servidor.' };
+  }
 }
 
-export function removeImage(n: number, file: string): boolean {
-  if (!isSafeName(file)) return false;
-  const p = join(cityDir(n), file);
-  if (!existsSync(p)) return false;
-  rmSync(p);
-  return true;
+// Empty slot k.
+export function clearSlot(n: number, k: number): boolean {
+  if (!validSlot(k)) return false;
+  const existing = slotFile(n, k);
+  if (!existing) return false;
+  try {
+    rmSync(join(cityDir(n), existing));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function readImage(n: number, file: string): { bytes: Buffer; type: string } | null {
@@ -64,5 +84,9 @@ export function readImage(n: number, file: string): { bytes: Buffer; type: strin
   if (!(ext in EXT_TYPE)) return null;
   const p = join(cityDir(n), file);
   if (!existsSync(p)) return null;
-  return { bytes: readFileSync(p), type: EXT_TYPE[ext] };
+  try {
+    return { bytes: readFileSync(p), type: EXT_TYPE[ext] };
+  } catch {
+    return null;
+  }
 }

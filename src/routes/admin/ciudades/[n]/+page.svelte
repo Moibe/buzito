@@ -5,8 +5,10 @@
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
-  // Always render `max` slots: filled ones first, then empty placeholders.
-  const slots = $derived(Array.from({ length: data.max }, (_, i) => data.images[i] ?? null));
+  // Submit the slot's upload form as soon as a file is chosen.
+  function onPick(e: Event) {
+    (e.currentTarget as HTMLInputElement).form?.requestSubmit();
+  }
 </script>
 
 <svelte:head>
@@ -27,7 +29,7 @@
           <span class="flag fi fi-{cityFlagCode(data.city)}" title={cityCountry(data.city)} aria-hidden="true"></span>
         {/if}
       </h1>
-      <p>Imágenes de la ciudad — {data.images.length}/{data.max} usadas.</p>
+      <p>4 imágenes en secuencia (la posición importa). Clic en un cuadro para subir o reemplazar.</p>
     </header>
 
     {#if form?.error}
@@ -35,29 +37,39 @@
     {/if}
 
     <div class="grid">
-      {#each slots as file, i}
-        <div class="slot" class:filled={!!file}>
+      {#each data.slots as file, i}
+        {@const k = i + 1}
+        <div class="slot">
+          <form method="POST" action="?/upload" enctype="multipart/form-data" use:enhance>
+            <input type="hidden" name="slot" value={k} />
+            <input
+              class="file"
+              id="slot-{k}"
+              type="file"
+              name="image"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onchange={onPick}
+            />
+            <label class="box" class:filled={!!file} for="slot-{k}">
+              <span class="pos">{k}</span>
+              {#if file}
+                <img src="/api/cities/{data.n}/{file}" alt="{data.city} {k}" />
+                <span class="overlay">Clic para reemplazar</span>
+              {:else}
+                <span class="plus">＋</span>
+                <span class="lbl">Subir imagen {k}</span>
+              {/if}
+            </label>
+          </form>
           {#if file}
-            <img src="/api/cities/{data.n}/{file}" alt="{data.city} {i + 1}" />
             <form class="rm" method="POST" action="?/remove" use:enhance>
-              <input type="hidden" name="file" value={file} />
+              <input type="hidden" name="slot" value={k} />
               <button type="submit" title="Quitar imagen" aria-label="Quitar imagen">✕</button>
             </form>
-          {:else}
-            <span class="empty">Vacío</span>
           {/if}
         </div>
       {/each}
     </div>
-
-    {#if data.images.length < data.max}
-      <form class="upload" method="POST" action="?/upload" enctype="multipart/form-data" use:enhance>
-        <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" required />
-        <button type="submit">Subir imagen</button>
-      </form>
-    {:else}
-      <p class="full">Máximo alcanzado — quita una para subir otra.</p>
-    {/if}
   </div>
 </div>
 
@@ -142,34 +154,88 @@
   }
   .slot {
     position: relative;
-    aspect-ratio: 16 / 10;
-    border-radius: 10px;
-    border: 1px dashed rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.04);
+  }
+  .slot form {
+    margin: 0;
+  }
+  .file {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .box {
+    position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+    aspect-ratio: 16 / 10;
+    border-radius: 10px;
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
     overflow: hidden;
+    transition: border-color 0.15s, background 0.15s;
   }
-  .slot.filled {
+  .box:hover {
+    border-color: rgba(147, 197, 253, 0.8);
+    background: rgba(147, 197, 253, 0.1);
+  }
+  .box.filled {
     border-style: solid;
     border-color: rgba(255, 255, 255, 0.2);
   }
-  .slot img {
+  .box img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    display: block;
   }
-  .empty {
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 13px;
+  .pos {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    z-index: 2;
+    font: 800 13px/1 system-ui, sans-serif;
+    color: #fff;
+    background: rgba(10, 20, 30, 0.6);
+    border-radius: 6px;
+    padding: 3px 7px;
+  }
+  .plus {
+    font-size: 30px;
+    font-weight: 300;
+    line-height: 1;
+  }
+  .lbl {
+    font-size: 12.5px;
+  }
+  .overlay {
+    position: absolute;
+    inset: auto 0 0 0;
+    z-index: 2;
+    background: rgba(10, 20, 30, 0.6);
+    color: #fff;
+    font-size: 12px;
+    text-align: center;
+    padding: 5px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .box.filled:hover .overlay {
+    opacity: 1;
   }
   .rm {
     position: absolute;
     top: 8px;
     right: 8px;
     margin: 0;
+    z-index: 3;
   }
   .rm button {
     width: 28px;
@@ -184,42 +250,5 @@
   .rm button:hover {
     background: rgba(239, 68, 68, 0.85);
     color: #fff;
-  }
-  .upload {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    margin-top: 18px;
-  }
-  .upload input[type='file'] {
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 13px;
-  }
-  .upload input[type='file']::file-selector-button {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 8px;
-    padding: 7px 12px;
-    margin-right: 10px;
-    cursor: pointer;
-  }
-  .upload button[type='submit'] {
-    background: #ffd700;
-    color: #12224a;
-    border: none;
-    border-radius: 8px;
-    padding: 9px 18px;
-    font: 700 13px/1 system-ui, sans-serif;
-    cursor: pointer;
-  }
-  .upload button[type='submit']:hover {
-    background: #ffe033;
-  }
-  .full {
-    margin-top: 18px;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 13px;
   }
 </style>
