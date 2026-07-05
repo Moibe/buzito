@@ -300,7 +300,12 @@
     {#key displayedPct}
       <span class="progress-pct">{displayedPct}%</span>
     {/key}
-    <span class="progress-count">{game.visitedCount} / {game.totalTiles}</span>
+    <span class="progress-count">
+      <svg class="tile-spin" viewBox="0 0 24 24" aria-hidden="true">
+        <polygon points="12,2 20.66,7 20.66,17 12,22 3.34,17 3.34,7" />
+      </svg>
+      {game.visitedCount} / {game.totalTiles}
+    </span>
   </div>
 </div>
 
@@ -535,8 +540,9 @@
   }
   .progress {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     color: #ffd700;
     font: 700 15px/1 system-ui, sans-serif;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
@@ -555,9 +561,30 @@
     animation: pctPop 0.5s cubic-bezier(0.2, 1.4, 0.3, 1);
   }
   .progress-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: 14px;
     opacity: 0.85;
     font-variant-numeric: tabular-nums;
+  }
+  /* Little hex "tile" that spins slowly + forever next to the tile count. */
+  .tile-spin {
+    width: 16px;
+    height: 16px;
+    transform-origin: center;
+    animation: tileSpin 4.5s linear infinite;
+  }
+  .tile-spin polygon {
+    fill: rgba(255, 215, 0, 0.85);
+    stroke: rgba(120, 80, 20, 0.85);
+    stroke-width: 1.2;
+    stroke-linejoin: round;
+  }
+  @keyframes tileSpin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   /* Dramatic pop: overshoot scale + bright flash + glow burst, then settle. */
   @keyframes pctPop {
