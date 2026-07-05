@@ -57,7 +57,7 @@ export const config = $state({
   rules: {
     winPct: 0.9,
     heal: 12,
-    respawn: { health: 180, line: 25, xstar: 25, star: 25 } as Record<BonusType, number>,
+    respawn: { health: 180, line: 25, xstar: 50, star: 75 } as Record<BonusType, number>,
   },
   // Editable per-mission enemy composition (admin drag-to-add). Starts as the
   // base table; persisted so edits reach the game.

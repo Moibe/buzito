@@ -23,7 +23,7 @@ function base(): Settings {
   return {
     winPct: 0.9,
     heal: 12,
-    respawn: { health: 180, line: 25, xstar: 25, star: 25 },
+    respawn: { health: 180, line: 25, xstar: 50, star: 75 },
     missionEnemies: MISSIONS.map((m) => m.enemies.map((e) => ({ type: e.type, count: e.count }))),
     missionBonuses: MISSIONS.map((m) => ({ ...m.bonuses })),
   };
